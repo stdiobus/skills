@@ -42,7 +42,7 @@
 
 `@stdiobus/skills` is an **MCP server** that exposes structured, validated agent skills over stdio transport. It is part of the [stdio Bus](https://github.com/stdiobus) ecosystem — a runtime for multi-agent systems built on native stdio communication.
 
-The package ships as both an **executable MCP server** (`npx @stdiobus/skills`) and an **npm library** with programmatic access to skill content and metadata. Agents connect via JSON-RPC 2.0 / NDJSON over stdio, discover available skills through five MCP tools, and consume deterministic, machine-parseable knowledge to generate correct code.
+The package ships as both an **executable MCP server** (`npx mcp-skills`) and an **npm library** with programmatic access to skill content and metadata. Agents connect via JSON-RPC 2.0 / NDJSON over stdio, discover available skills through five MCP tools, and consume deterministic, machine-parseable knowledge to generate correct code.
 
 This is not documentation for humans. It is a **machine-readable knowledge base** designed for LLM-based agents operating within coding assistants, agentic development environments, and multi-agent orchestration systems.
 
@@ -120,7 +120,7 @@ sequenceDiagram
 Run the server directly — any MCP-compatible client can connect over stdio:
 
 ```bash
-npx @stdiobus/skills
+npx mcp-skills
 ```
 
 Or add it to your MCP client configuration:
@@ -130,7 +130,7 @@ Or add it to your MCP client configuration:
   "mcpServers": {
     "@stdiobus/skills": {
       "command": "npx",
-      "args": ["@stdiobus/skills"]
+      "args": ["mcp-skills"]
     }
   }
 }
@@ -156,14 +156,17 @@ console.log(SkillName.RuntimePatternsHttp); // "runtime-patterns-http"
 | Export Path | Content |
 |-------------|---------|
 | `@stdiobus/skills` | `SkillName` enum, `Skill` and `SkillManifest` types |
+| `@stdiobus/skills/mcp-server` | MCP server entry point (programmatic import) |
 | `@stdiobus/skills/skills-manifest` | `skills-manifest.json` — registry of all skills |
+| `@stdiobus/skills/skills/*/SKILL.md` | Direct access to skill documents |
+| `@stdiobus/skills/skills/*/references/*` | Direct access to reference materials and templates |
 | `@stdiobus/skills/package.json` | Package metadata |
 
 ### Published Files
 
 The npm package includes:
 
-- `out/dist/index.js` — ESM library bundle (minified, tree-shaken)
+- `out/dist/index.mjs` — ESM library bundle (minified, tree-shaken)
 - `out/dist/mcp-server.mjs` — Executable MCP server (standalone, shebang)
 - `out/tsc/**/*.d.ts` — TypeScript declarations
 - `agent-skills/**/SKILL.md` — All 12 skill documents

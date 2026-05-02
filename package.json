@@ -5,18 +5,27 @@
   "private": false,
   "type": "commonjs",
   "sideEffects": false,
-  "main": "out/dist/index.js",
-  "module": "out/dist/index.js",
+  "main": "out/dist/index.mjs",
+  "module": "out/dist/index.mjs",
   "types": "out/tsc/index.d.ts",
   "exports": {
     ".": {
       "types": "./out/tsc/index.d.ts",
-      "import": "./out/dist/index.js",
-      "require": "./out/dist/index.js",
-      "default": "./out/dist/index.js"
+      "import": "./out/dist/index.mjs",
+      "default": "./out/dist/index.mjs"
+    },
+    "./mcp-server": {
+      "import": "./out/dist/mcp-server.mjs",
+      "default": "./out/dist/mcp-server.mjs"
     },
     "./skills-manifest": {
       "default": "./agent-skills/skills-manifest.json"
+    },
+    "./skills/*/SKILL.md": {
+      "default": "./agent-skills/*/SKILL.md"
+    },
+    "./skills/*/references/*": {
+      "default": "./agent-skills/*/references/*"
     },
     "./package.json": "./package.json"
   },
@@ -35,10 +44,11 @@
     "clean": "rm -rf out",
     "build:pack": "npm run build && npm pack --pack-destination out/",
     "ci": "npm run typecheck && npm run validate && npm run test:ci",
+    "verify:package": "tsx agent-skills/scripts/verify-package/verify-package.ts",
     "prepublishOnly": "npm run clean && npm run build && npm run test"
   },
   "bin": {
-    "@stdiobus/skills": "out/dist/mcp-server.mjs"
+    "mcp-skills": "out/dist/mcp-server.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -161,12 +171,12 @@
   },
   "packageManager": "yarn@1.22.22",
   "files": [
-    "out/dist/**/*.js",
     "out/dist/**/*.mjs",
     "out/tsc/**/*.d.ts",
     "agent-skills/**/SKILL.md",
     "agent-skills/**/references/**",
     "agent-skills/skills-manifest.json",
+    "!agent-skills/scripts/**",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

@@ -24,7 +24,7 @@ const targets = {
   esm: {
     label: 'ESM Bundle',
     entryPoints: ['agent-skills/index.ts'],
-    outfile: 'out/dist/index.js',
+    outfile: 'out/dist/index.mjs',
     bundle: true,
     platform: 'node',
     target: ['node20'],
