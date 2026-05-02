@@ -22,8 +22,8 @@
   <a href="https://aws.amazon.com/cdk"><img src="https://img.shields.io/badge/AWS-CDK%202.x-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS CDK" /></a>
   <a href="https://jestjs.io"><img src="https://img.shields.io/badge/tested-jest%20%2B%20fast--check-C21325?style=for-the-badge&logo=jest&logoColor=white" alt="Jest" /></a>
   <a href="#test-strategy"><img src="https://img.shields.io/badge/coverage-96%25-brightgreen?style=for-the-badge" alt="Coverage" /></a>
-  <a href="https://github.com/stdiobus/runtime-skills/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=for-the-badge&logo=opensourceinitiative" alt="License" /></a>
-  <a href="https://github.com/stdiobus/runtime-skills"><img src="https://img.shields.io/badge/status-stable-brightgreen?style=for-the-badge" alt="Stable" /></a>
+  <a href="https://github.com/stdiobus/skills/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=for-the-badge&logo=opensourceinitiative" alt="License" /></a>
+  <a href="https://github.com/stdiobus/skills"><img src="https://img.shields.io/badge/status-stable-brightgreen?style=for-the-badge" alt="Stable" /></a>
 </p>
 
 <p align="center">
@@ -50,7 +50,7 @@ This is not documentation for humans. It is a **machine-readable knowledge base*
 
 There is no established standard for delivering structured, validated knowledge to AI agents over MCP. This project introduces the concept of **agentic skills** — machine-parseable, CI-validated skill documents served as MCP tools over stdio. The architecture, skill schema, validation pipeline, and delivery infrastructure are production-ready and designed to support multiple independent skill collections.
 
-The first skill collection — **Runtime Web** — ships with the package. It contains **12 skills across 5 layers** that teach agents how to generate correct, type-safe code for [`@worktif/runtime`](https://github.com/stdiobus/runtime-skills), an AWS Lambda serverless framework for TypeScript microservices. New skill collections for other frameworks and domains can be added directly to the repository following the same schema.
+The first skill collection — **Runtime Web** — ships with the package. It contains **12 skills across 5 layers** that teach agents how to generate correct, type-safe code for [`@worktif/runtime`](https://runtimeweb.com), an AWS Lambda serverless framework for TypeScript microservices. New skill collections for other frameworks and domains can be added directly to the repository following the same schema.
 
 ### Why Skills Instead of Docs
 
@@ -174,7 +174,7 @@ The npm package includes:
 
 ## Available Skill Collection: Runtime Web
 
-The first and currently only skill collection covers [`@worktif/runtime`](https://github.com/stdiobus/runtime-skills) — an AWS Lambda serverless framework for TypeScript microservices. It contains **12 skills organized across 5 layers**, each validated against real framework types by CI.
+The first and currently only skill collection covers [`@worktif/runtime`](https://runtimeweb.com) — an AWS Lambda serverless framework for TypeScript microservices. It contains **12 skills organized across 5 layers**, each validated against real framework types by CI.
 
 ### The 5-Layer Skill Hierarchy
 
