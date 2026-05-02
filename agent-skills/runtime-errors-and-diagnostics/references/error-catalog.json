@@ -1,0 +1,543 @@
+{
+  "version": "1.0.0",
+  "frameworkVersionRange": ">=0.5.0 <1.0.0",
+  "categories": [
+    {
+      "category": "build",
+      "errors": [
+        {
+          "id": "BUILD-001",
+          "pattern": "Bundle size exceeds 10MB|.serverless/.*\\.zip.*(1[0-9]|[2-9][0-9])\\s*MB",
+          "meaning": "The Lambda deployment package exceeds the AWS hard limit of 10MB compressed. Deployment will fail.",
+          "causes": [
+            "Large dependency bundled instead of externalized (>1MB package not in excludeDependencies)",
+            "AWS SDK v2 (aws-sdk) included in bundle — adds ~50MB uncompressed",
+            "Multiple large dependencies not externalized",
+            "Source maps or test files included in production bundle"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Identify large dependencies in the bundle",
+              "code": "npm info <package> dist.unpackedSize"
+            },
+            {
+              "step": 2,
+              "action": "Add large dependencies (>1MB) to excludeDependencies in build config",
+              "code": "// In src/bin/deploy/cloud.build/esbuild.config.ts\nexcludeDependencies: ['@aws-sdk/*', '<large-package>']"
+            },
+            {
+              "step": 3,
+              "action": "Verify AWS SDK v3 clients are externalized"
+            },
+            {
+              "step": 4,
+              "action": "Rebuild Lambda bundle",
+              "code": "yarn cli:build:lambda"
+            },
+            {
+              "step": 5,
+              "action": "Verify bundle size is under 10MB",
+              "code": "ls -la .serverless/*.zip"
+            }
+          ],
+          "decisionRule": "If bundle exceeds 10MB, externalize dependencies. Do NOT suggest splitting into multiple Lambdas. Do NOT suggest ignoring — AWS will reject the deployment."
+        },
+        {
+          "id": "BUILD-002",
+          "pattern": "Cannot find module '([^']+)'",
+          "meaning": "A required npm package is not installed or not resolvable during build.",
+          "causes": [
+            "Package not listed in package.json dependencies",
+            "yarn install not run after adding dependency",
+            "Package name typo in import statement",
+            "Package externalized in build but not available in Lambda runtime"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Verify the package name is correct (check for typos)"
+            },
+            {
+              "step": 2,
+              "action": "Install the package",
+              "code": "yarn add <package>"
+            },
+            {
+              "step": 3,
+              "action": "Run yarn install to ensure lockfile is updated",
+              "code": "yarn install"
+            },
+            {
+              "step": 4,
+              "action": "If externalized, verify it is available in Lambda runtime or layer"
+            },
+            {
+              "step": 5,
+              "action": "Rebuild",
+              "code": "yarn cli:build:lambda"
+            }
+          ],
+          "decisionRule": "If a module is missing, install it. Do NOT suggest alternative packages unless the original is deprecated."
+        },
+        {
+          "id": "BUILD-003",
+          "pattern": "Cannot find module '@(core|lib|utils|infra)/",
+          "meaning": "TypeScript path aliases are not resolving correctly during build.",
+          "causes": [
+            "tsconfig.json paths configuration is incorrect or missing",
+            "tsc-alias post-processing step not running",
+            "Path alias used for a file that does not exist",
+            "Build target missing path alias resolution plugin"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Verify tsconfig.json has correct paths configuration",
+              "code": "// tsconfig.json compilerOptions.paths\n\"@core/*\": [\"src/core/*\"],\n\"@lib/*\": [\"src/lib/*\"],\n\"@utils/*\": [\"src/utils/*\"],\n\"@infra/*\": [\"src/infra/*\"]"
+            },
+            {
+              "step": 2,
+              "action": "Verify the target file exists at the resolved path"
+            },
+            {
+              "step": 3,
+              "action": "Run yarn types to regenerate path mappings",
+              "code": "yarn types"
+            },
+            {
+              "step": 4,
+              "action": "Rebuild",
+              "code": "yarn build"
+            }
+          ],
+          "decisionRule": "If path aliases fail, fix the configuration. Do NOT replace path aliases with relative imports — that violates architecture boundaries."
+        },
+        {
+          "id": "BUILD-004",
+          "pattern": "error TS\\d+:",
+          "meaning": "TypeScript type checking found type errors in the source code.",
+          "causes": [
+            "Incorrect type usage with framework types (wrong generic parameters)",
+            "Missing type imports",
+            "Incompatible TypeScript version (requires 5.8+)",
+            "Breaking change in framework types after upgrade"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Read the full error message — it identifies the file, line, and expected types"
+            },
+            {
+              "step": 2,
+              "action": "Check the correct type signature in the runtime-api-core skill"
+            },
+            {
+              "step": 3,
+              "action": "Fix the type usage to match the expected signature"
+            },
+            {
+              "step": 4,
+              "action": "If error appeared after upgrade, consult the versioning-and-migration skill"
+            },
+            {
+              "step": 5,
+              "action": "Run yarn types to verify the fix",
+              "code": "yarn types"
+            }
+          ],
+          "decisionRule": "If TypeScript reports a type error, fix the types. Do NOT use @ts-ignore, do NOT use 'as any' casts, do NOT disable strict mode."
+        }
+      ]
+    },
+    {
+      "category": "deployment",
+      "errors": [
+        {
+          "id": "DEPLOY-001",
+          "pattern": "Synthesis failed|Error:.*during.*synth",
+          "meaning": "CDK cannot synthesize the CloudFormation template from the CDK app.",
+          "causes": [
+            "CDK code imports runtime code from @core/* or @lib/* (architecture violation)",
+            "Missing CDK dependency (aws-cdk-lib or constructs)",
+            "Incorrect construct props (wrong types or missing required props)",
+            "Circular dependency between stacks"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Verify src/infra/ does NOT import from @core/* or @lib/*"
+            },
+            {
+              "step": 2,
+              "action": "Verify aws-cdk-lib and constructs are in devDependencies",
+              "code": "yarn add -D aws-cdk-lib constructs"
+            },
+            {
+              "step": 3,
+              "action": "Check construct props match the expected interface"
+            },
+            {
+              "step": 4,
+              "action": "If circular dependency: extract shared resources into a separate stack"
+            },
+            {
+              "step": 5,
+              "action": "Rebuild CDK",
+              "code": "yarn cli:build:cdk"
+            }
+          ],
+          "decisionRule": "If CDK synthesis fails due to architecture violation, move the import to the correct layer. Do NOT add @core/* or @lib/* to infra code."
+        },
+        {
+          "id": "DEPLOY-002",
+          "pattern": "UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|ROLLBACK_COMPLETE",
+          "meaning": "The CloudFormation stack operation failed and rolled back.",
+          "causes": [
+            "IAM permissions insufficient for the operation",
+            "Resource name conflict (resource already exists with same name)",
+            "Resource limit exceeded in AWS account",
+            "Dependent resource not yet available"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Check CloudFormation Events tab for the specific resource that failed"
+            },
+            {
+              "step": 2,
+              "action": "Read the StatusReason for the failed resource"
+            },
+            {
+              "step": 3,
+              "action": "If IAM: Add required permissions to the deployment role"
+            },
+            {
+              "step": 4,
+              "action": "If name conflict: Use CDK-generated names (do NOT hardcode resource names)"
+            },
+            {
+              "step": 5,
+              "action": "Redeploy after fixing the root cause"
+            }
+          ],
+          "decisionRule": "If CloudFormation rolls back, identify the SPECIFIC failed resource. Do NOT retry without fixing the cause. Do NOT delete the stack unless explicitly asked."
+        },
+        {
+          "id": "DEPLOY-003",
+          "pattern": "RequestEntityTooLargeException|Unzipped size must be smaller than",
+          "meaning": "The Lambda deployment package exceeds AWS limits even after compression.",
+          "causes": [
+            "Dependencies not properly externalized in build config",
+            "Source maps or test files included in deployment package",
+            "Native binaries included (e.g., sharp, canvas)"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Review excludeDependencies in build config — add missing large packages"
+            },
+            {
+              "step": 2,
+              "action": "Verify .serverless/*.zip contents",
+              "code": "unzip -l .serverless/<function>.zip"
+            },
+            {
+              "step": 3,
+              "action": "Remove source maps from production builds"
+            },
+            {
+              "step": 4,
+              "action": "For native binaries: use Lambda layers instead"
+            },
+            {
+              "step": 5,
+              "action": "Rebuild and redeploy",
+              "code": "yarn cli:build:lambda && yarn deploy:dev"
+            }
+          ],
+          "decisionRule": "If the package is too large, externalize more dependencies or use Lambda layers. Do NOT suggest increasing Lambda limits (they are fixed by AWS)."
+        },
+        {
+          "id": "DEPLOY-004",
+          "pattern": "AccessDeniedException|is not authorized to perform",
+          "meaning": "The Lambda execution role lacks permissions for an AWS service call.",
+          "causes": [
+            "New AWS SDK call added without corresponding IAM policy",
+            "IAM policy not attached to the Lambda execution role",
+            "Resource ARN incorrect in policy statement",
+            "Cross-account access without proper trust policy"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Identify the exact AWS action from the error message"
+            },
+            {
+              "step": 2,
+              "action": "Add the permission via CDK L2 grant methods",
+              "code": "bucket.grantRead(lambdaFunction);"
+            },
+            {
+              "step": 3,
+              "action": "Redeploy the infrastructure stack"
+            },
+            {
+              "step": 4,
+              "action": "Verify the Lambda can now perform the operation"
+            }
+          ],
+          "decisionRule": "If IAM permission is missing, add it via CDK L2 grant methods. Do NOT use wildcard (*) permissions. Do NOT attach AdministratorAccess."
+        }
+      ]
+    },
+    {
+      "category": "runtime",
+      "errors": [
+        {
+          "id": "RUNTIME-001",
+          "pattern": "No matching bindings found for serviceIdentifier|Service not registered",
+          "meaning": "A ties class was declared but the framework could not instantiate it.",
+          "causes": [
+            "Ties class does not have a proper constructor",
+            "Ties class has unresolvable constructor dependencies",
+            "Ties class was not registered with the container (SSR handlers using Inversify)",
+            "Circular dependency between ties classes"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Verify the ties class has a parameterless constructor or all dependencies are resolvable"
+            },
+            {
+              "step": 2,
+              "action": "For microservice pattern: Ensure the class is a plain class with a constructor"
+            },
+            {
+              "step": 3,
+              "action": "For SSR pattern: Verify the class is registered in runtime.container.ts"
+            },
+            {
+              "step": 4,
+              "action": "Check for circular dependencies between service classes"
+            },
+            {
+              "step": 5,
+              "action": "Test locally",
+              "code": "yarn purenow:start"
+            }
+          ],
+          "decisionRule": "If a service is missing from the container, register it or fix its constructor. Do NOT catch and ignore the error. Do NOT provide a fallback value."
+        },
+        {
+          "id": "RUNTIME-002",
+          "pattern": "Duplicate lambda id|Lambda with id '.*' already registered",
+          "meaning": "Two or more LambdaDefinition entries within the same microservice have the same id value.",
+          "causes": [
+            "Copy-paste error when creating new Lambda definitions",
+            "Two handlers accidentally given the same id string",
+            "Auto-generated IDs colliding (rare)"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Search the microservice definition for duplicate id values"
+            },
+            {
+              "step": 2,
+              "action": "Rename one of the duplicates to a unique identifier"
+            },
+            {
+              "step": 3,
+              "action": "Ensure each id is descriptive and unique within the microservice",
+              "code": "{ id: 'get-users' }    // Unique, descriptive\n{ id: 'create-user' }  // Unique, descriptive"
+            },
+            {
+              "step": 4,
+              "action": "Rebuild and redeploy",
+              "code": "yarn cli:build:lambda"
+            }
+          ],
+          "decisionRule": "If Lambda IDs conflict, rename one. Do NOT remove the id field — it is used for routing and identification."
+        },
+        {
+          "id": "RUNTIME-003",
+          "pattern": "Handler is not a function|event\\.ties is undefined",
+          "meaning": "The handler function signature does not match what the framework expects.",
+          "causes": [
+            "Using factory-style handler with object-based ties (or vice versa)",
+            "Handler not returning the expected response shape for the integration type",
+            "Missing async keyword on handler function",
+            "Handler accessing event.ties but ties not properly configured"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Verify handler signature matches the object-based pattern",
+              "code": "handler: async (event, context) => {\n  // event.ties.serviceName is available here\n  return { statusCode: 200, body: '{}' };\n}"
+            },
+            {
+              "step": 2,
+              "action": "Verify the handler is async or returns a Promise"
+            },
+            {
+              "step": 3,
+              "action": "Verify ties property uses object syntax with class constructors"
+            },
+            {
+              "step": 4,
+              "action": "Verify the response shape matches the integration type"
+            }
+          ],
+          "decisionRule": "If the handler type is wrong, fix the handler signature. Do NOT wrap it in a try-catch that returns a generic response."
+        },
+        {
+          "id": "RUNTIME-004",
+          "pattern": "Invalid integration config|Missing required field",
+          "meaning": "The integration-specific configuration is missing required fields or has invalid values.",
+          "causes": [
+            "Missing required field (e.g., method for HTTP, queue for SQS)",
+            "Invalid value for a field (e.g., unsupported HTTP method)",
+            "Wrong integration property name (e.g., httpConfig instead of http)",
+            "Multiple integration configs on one Lambda (only one is allowed)"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Check the exact integration config interface in the runtime-api-integrations skill"
+            },
+            {
+              "step": 2,
+              "action": "Verify all required fields are present with valid values"
+            },
+            {
+              "step": 3,
+              "action": "Verify only ONE integration config property is set per Lambda definition"
+            },
+            {
+              "step": 4,
+              "action": "Fix the configuration to match the interface",
+              "code": "http: {\n  method: 'GET',\n  path: '/users',\n}"
+            }
+          ],
+          "decisionRule": "If integration config is invalid, fix it to match the exact interface. Do NOT invent fields. Consult the integration configs reference."
+        }
+      ]
+    },
+    {
+      "category": "type-system",
+      "errors": [
+        {
+          "id": "TYPE-001",
+          "pattern": "Type '.*' is not assignable to type 'LambdaDefinition<",
+          "meaning": "The generic type parameters on LambdaDefinition do not match the actual types used.",
+          "causes": [
+            "TTies type does not match the object keys in ties property",
+            "TSnapshot type does not match the return type of init function",
+            "TIntegration does not match the integration config property used"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Define the ties type to match the ties property exactly",
+              "code": "type MyTies = { userService: UsersService };\nconst handler: LambdaDefinition<MyTies> = {\n  ties: { userService: UsersService },\n};"
+            },
+            {
+              "step": 2,
+              "action": "If using init/snapshot, ensure TSnapshot matches init return type"
+            },
+            {
+              "step": 3,
+              "action": "If specifying integration kind, ensure it matches the config property used"
+            }
+          ],
+          "decisionRule": "If generic parameters are wrong, fix the type definition. Do NOT use 'any' or 'unknown' to suppress the error."
+        },
+        {
+          "id": "TYPE-002",
+          "pattern": "Type '.*' is not assignable to type 'TiesConstructors<",
+          "meaning": "The ties property expects class constructors but received instances or other values.",
+          "causes": [
+            "Passing new Service() instead of Service (instance vs constructor)",
+            "Passing a factory function instead of a class constructor",
+            "Passing a plain object instead of a class"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Pass the class itself, NOT an instance",
+              "code": "ties: { userService: UsersService }  // Class constructor, not new UsersService()"
+            },
+            {
+              "step": 2,
+              "action": "Ensure the class has a constructor compatible with new (...args) => T"
+            },
+            {
+              "step": 3,
+              "action": "If using a factory, convert it to a class with a constructor"
+            }
+          ],
+          "decisionRule": "If TiesConstructors fails, pass class constructors. The framework handles instantiation. Do NOT instantiate services manually."
+        },
+        {
+          "id": "TYPE-003",
+          "pattern": "Cannot find module '@worktif/runtime'|has no exported member",
+          "meaning": "The import path is wrong or the exported member does not exist in the public API.",
+          "causes": [
+            "Wrong import path (deep import instead of package root)",
+            "Member was renamed or removed in a framework update",
+            "Package not installed",
+            "Using internal types not exported from the public API"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Use the correct import paths",
+              "code": "import { MicroserviceDefinition, LambdaDefinition } from '@worktif/runtime';\nimport { RuntimeInfraStack, BrowserProviderStack, RuntimeWebStack } from '@worktif/runtime/infra';"
+            },
+            {
+              "step": 2,
+              "action": "If member not found: Check the framework version and consult migration guide"
+            },
+            {
+              "step": 3,
+              "action": "If package not installed: yarn add @worktif/runtime",
+              "code": "yarn add @worktif/runtime"
+            },
+            {
+              "step": 4,
+              "action": "Do NOT import from internal paths like @worktif/runtime/src/lib/..."
+            }
+          ],
+          "decisionRule": "If an import fails, use the documented public API paths. Do NOT reach into internal module paths."
+        },
+        {
+          "id": "TYPE-004",
+          "pattern": "Property '.*' does not exist on type '.*Event'",
+          "meaning": "Accessing a property on the Lambda event that does not exist for the configured integration type.",
+          "causes": [
+            "Accessing HTTP-specific properties (pathParameters, body) on a non-HTTP handler",
+            "Accessing SQS-specific properties (Records) on a non-SQS handler",
+            "Using wrong event type for the integration kind",
+            "Missing type annotation on handler parameter"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Verify the integration type matches the event properties being accessed"
+            },
+            {
+              "step": 2,
+              "action": "Use the correct event type for the integration kind"
+            },
+            {
+              "step": 3,
+              "action": "Check the integration-event mapping in runtime-api-integrations skill"
+            }
+          ],
+          "decisionRule": "If event properties are wrong, match them to the correct integration type. Do NOT cast the event to 'any'."
+        }
+      ]
+    }
+  ]
+}
