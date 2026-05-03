@@ -20,6 +20,7 @@
     "node_modules",
     "dist",
     "out",
-    "test"
+    "agent-skills/__tests__",
+    "agent-skills/scripts"
   ]
 }

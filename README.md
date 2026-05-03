@@ -42,7 +42,7 @@
 
 `@stdiobus/skills` is an **MCP server** that exposes structured, validated agent skills over stdio transport. It is part of the [stdio Bus](https://github.com/stdiobus) ecosystem — a runtime for multi-agent systems built on native stdio communication.
 
-The package ships as both an **executable MCP server** (`npx mcp-skills`) and an **npm library** with programmatic access to skill content and metadata. Agents connect via JSON-RPC 2.0 / NDJSON over stdio, discover available skills through five MCP tools, and consume deterministic, machine-parseable knowledge to generate correct code.
+The package ships as both an **executable MCP server** (`npx @stdiobus/skills`) and an **npm library** with programmatic access to skill content and metadata. Agents connect via JSON-RPC 2.0 / NDJSON over stdio, discover available skills through five MCP tools, and consume deterministic, machine-parseable knowledge to generate correct code.
 
 This is not documentation for humans. It is a **machine-readable knowledge base** designed for LLM-based agents operating within coding assistants, agentic development environments, and multi-agent orchestration systems.
 
@@ -120,7 +120,7 @@ sequenceDiagram
 Run the server directly — any MCP-compatible client can connect over stdio:
 
 ```bash
-npx mcp-skills
+npx -y @stdiobus/skills
 ```
 
 Or add it to your MCP client configuration:
@@ -130,7 +130,7 @@ Or add it to your MCP client configuration:
   "mcpServers": {
     "@stdiobus/skills": {
       "command": "npx",
-      "args": ["mcp-skills"]
+      "args": ["-y", "@stdiobus/skills"]
     }
   }
 }

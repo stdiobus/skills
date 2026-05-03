@@ -236,7 +236,7 @@ describe('Package Exports & Tarball Verification', () => {
       expect(fs.existsSync(binPath)).toBe(true);
     });
 
-    it('npx mcp-skills --help does not crash (exits cleanly or starts server)', () => {
+    it('npx @stdiobus/skills does not crash (exits cleanly or starts server)', () => {
       // The MCP server reads from stdin, so without input it will hang.
       // We verify it starts without immediate crash by sending EOF.
       try {

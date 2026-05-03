@@ -15,7 +15,6 @@
   ],
   "exclude": [
     "node_modules",
-    "out",
-    "agent-skills/__tests__/**"
+    "out"
   ]
 }
