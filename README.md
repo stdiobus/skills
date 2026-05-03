@@ -117,13 +117,7 @@ sequenceDiagram
 
 ### As an MCP Server
 
-Run the server directly — any MCP-compatible client can connect over stdio:
-
-```bash
-npx -y @stdiobus/skills
-```
-
-Or add it to your MCP client configuration:
+Add the server to your MCP client configuration (Cursor, Claude Desktop, Kiro, Windsurf, etc.). The client will start the process automatically and communicate over stdio:
 
 ```json
 {
