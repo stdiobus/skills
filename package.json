@@ -117,7 +117,7 @@
   },
   "keywords": [
     "agent-skills",
-    "runtime-skills",
+    "skills",
     "model-context-protocol",
     "mcp",
     "agentic",
@@ -157,13 +157,13 @@
   ],
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/stdiobus/runtime-skills/issues"
+    "url": "https://github.com/stdiobus/skills/issues"
   },
-  "homepage": "https://github.com/stdiobus/runtime-skills#readme",
+  "homepage": "https://github.com/stdiobus/skills#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/stdiobus/runtime-skills.git",
-    "directory": "packages/runtime-skills"
+    "url": "git+https://github.com/stdiobus/skills.git",
+    "directory": "packages/skills"
   },
   "engines": {
     "node": ">=20.0.0",
