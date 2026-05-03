@@ -1,6 +1,6 @@
 {
   "name": "@stdiobus/skills",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP Agentic Skills — structured, validated, machine-readable skills for AI agents delivered over Model Context Protocol via stdio Bus",
   "private": false,
   "type": "commonjs",
