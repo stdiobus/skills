@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks that the build environment is ready for stdiobus-cpp-sdk.
+# Checks that the build environment is ready for stdiobus-sdk-cpp.
 # Usage: bash scripts/check-build-env.sh [--project-root /path/to/stdiobus-cpp]
 #
 # Exit codes:
@@ -45,7 +45,7 @@ check() {
     fi
 }
 
-echo "stdiobus-cpp-sdk build environment check"
+echo "stdiobus-sdk-cpp build environment check"
 echo "====================================="
 echo ""
 

@@ -1,5 +1,5 @@
 ---
-name: stdiobus-rust-sdk
+name: stdiobus-sdk-rust
 description: Build Rust applications using the stdio Bus SDK — an async AI agent transport layer for MCP/ACP protocols. Use when working with stdiobus crates, spawning worker processes, sending JSON-RPC requests to agents, configuring bus pools, choosing native or Docker backends, or integrating MCP/ACP agent communication in Rust. Triggers on mentions of stdiobus, stdio_bus, BusConfig, StdioBus, PoolConfig, backend_native, backend_docker, agent transport, worker pools, or JSON-RPC messaging in Rust.
 license: Apache-2.0
 compatibility: Requires Rust 1.70+, Tokio async runtime. Native backend requires libstdio_bus.a (prebuilt for Linux/macOS x86_64/aarch64). Docker backend requires Docker CLI.

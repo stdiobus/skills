@@ -1,5 +1,5 @@
 ---
-name: stdiobus-cpp-sdk
+name: stdiobus-sdk-cpp
 description: Build, integrate, and troubleshoot the stdiobus C++ SDK — an AI agent transport layer that manages child worker processes communicating over stdin/stdout using JSON-RPC (MCP/ACP). Use when writing C++ code that uses stdiobus, configuring the bus, debugging worker lifecycle issues, implementing async request/response patterns, or integrating stdiobus into CMake projects.
 license: Apache-2.0
 compatibility: Requires CMake 3.14+, C++17 compiler (GCC 11+, Clang 14+, AppleClang 15+). Linux x64/arm64 or macOS x64/arm64.

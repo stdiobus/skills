@@ -1,5 +1,5 @@
 ---
-name: stdiobus-node-sdk
+name: stdiobus-sdk-node
 description: >
   Build applications with @stdiobus/node — the Node.js SDK for stdio Bus, a deterministic
   C runtime that routes NDJSON JSON-RPC 2.0 messages between an application and worker
