@@ -9,6 +9,7 @@
  * Values are kebab-case strings matching the skill directory names.
  */
 export enum SkillName {
+  // Runtime Web collection (12 skills, 5 layers)
   RuntimeConcepts = 'runtime-concepts',
   RuntimeLifecycle = 'runtime-lifecycle',
   RuntimeApiCore = 'runtime-api-core',
@@ -21,11 +22,17 @@ export enum SkillName {
   RuntimeErrorsAndDiagnostics = 'runtime-errors-and-diagnostics',
   RuntimeVersioningAndMigration = 'runtime-versioning-and-migration',
   RuntimeValidationAndCi = 'runtime-validation-and-ci',
+
+  // stdio Bus SDK collection (3 skills)
+  StdiobusSdkCpp = 'stdiobus-sdk-cpp',
+  StdiobusSdkNode = 'stdiobus-sdk-node',
+  StdiobusSdkRust = 'stdiobus-sdk-rust',
 }
 
 /** A single skill entry from the manifest. */
 export interface Skill {
   name: string;
+  collection?: string;
   layer: number;
   versionRange: string;
   status: string;

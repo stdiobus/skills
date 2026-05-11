@@ -15,7 +15,7 @@
   <a href="https://esbuild.github.io"><img src="https://img.shields.io/badge/build-esbuild-yellow?style=for-the-badge&logo=esbuild" alt="Build" /></a>
 </p>
 <p align="center">
-  <a href="#available-skill-collection-runtime-web"><img src="https://img.shields.io/badge/skills-12-4a90e2?style=for-the-badge" alt="Skills" /></a>
+  <a href="#available-skill-collection-runtime-web"><img src="https://img.shields.io/badge/skills-15-4a90e2?style=for-the-badge" alt="Skills" /></a>
   <a href="#the-5-layer-skill-hierarchy"><img src="https://img.shields.io/badge/layers-5-50c878?style=for-the-badge" alt="Layers" /></a>
   <a href="#mcp-tool-interface"><img src="https://img.shields.io/badge/MCP%20tools-5-8A2BE2?style=for-the-badge" alt="MCP Tools" /></a>
   <a href="https://aws.amazon.com/lambda"><img src="https://img.shields.io/badge/AWS-Lambda-FF9900?style=for-the-badge&logo=awslambda&logoColor=white" alt="AWS Lambda" /></a>
@@ -31,6 +31,7 @@
   <a href="#mcp-tool-interface">MCP Tools</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#available-skill-collection-runtime-web">Runtime Web Skills</a> •
+  <a href="#available-skill-collection-stdio-bus-sdks">stdio Bus SDK Skills</a> •
   <a href="#for-ai-agents">For AI Agents</a> •
   <a href="#development">Development</a> •
   <a href="#license">License</a>
@@ -50,7 +51,11 @@ This is not documentation for humans. It is a **machine-readable knowledge base*
 
 There is no established standard for delivering structured, validated knowledge to AI agents over MCP. This project introduces the concept of **agentic skills** — machine-parseable, CI-validated skill documents served as MCP tools over stdio. The architecture, skill schema, validation pipeline, and delivery infrastructure are production-ready and designed to support multiple independent skill collections.
 
-The first skill collection — **Runtime Web** — ships with the package. It contains **12 skills across 5 layers** that teach agents how to generate correct, type-safe code for [`@worktif/runtime`](https://runtimeweb.com), an AWS Lambda serverless framework for TypeScript microservices. New skill collections for other frameworks and domains can be added directly to the repository following the same schema.
+The first skill collection — **Runtime Web** — ships with the package. It contains **12 skills across 5 layers** that teach agents how to generate correct, type-safe code for [`@worktif/runtime`](https://runtimeweb.com), an AWS Lambda serverless framework for TypeScript microservices.
+
+The second collection — **stdio Bus SDKs** — provides **3 skills** covering the C++, Node.js, and Rust SDKs for [stdio Bus](https://github.com/stdiobus) itself. These teach agents how to build applications that manage worker processes over JSON-RPC/NDJSON transport.
+
+New skill collections for other frameworks and domains can be added directly to the repository following the same schema.
 
 ### Why Skills Instead of Docs
 
@@ -95,7 +100,7 @@ sequenceDiagram
     participant D as Skill Content
 
     A->>+S: list_skills
-    S-->>-A: 12 skills, layers, status, version range
+    S-->>-A: 15 skills, layers, status, version range
 
     A->>+S: read_skill { skill: "runtime-patterns-http" }
     S->>+D: Load SKILL.md
@@ -140,7 +145,7 @@ yarn add @stdiobus/skills
 import { SkillName } from '@stdiobus/skills';
 import manifest from '@stdiobus/skills/skills-manifest';
 
-console.log(manifest.skills.length);        // 12
+console.log(manifest.skills.length);        // 15
 console.log(manifest.frameworkVersion);      // "0.5.0-beta.2"
 console.log(SkillName.RuntimePatternsHttp); // "runtime-patterns-http"
 ```
@@ -163,7 +168,7 @@ The npm package includes:
 - `out/dist/index.mjs` — ESM library bundle (minified, tree-shaken)
 - `out/dist/mcp-server.mjs` — Executable MCP server (standalone, shebang)
 - `out/tsc/**/*.d.ts` — TypeScript declarations
-- `agent-skills/**/SKILL.md` — All 12 skill documents
+- `agent-skills/**/SKILL.md` — All 15 skill documents
 - `agent-skills/**/references/**` — Reference materials, templates, error catalog
 - `agent-skills/skills-manifest.json` — Skill registry with validation status
 
@@ -171,7 +176,7 @@ The npm package includes:
 
 ## Available Skill Collection: Runtime Web
 
-The first and currently only skill collection covers [`@worktif/runtime`](https://runtimeweb.com) — an AWS Lambda serverless framework for TypeScript microservices. It contains **12 skills organized across 5 layers**, each validated against real framework types by CI.
+The first and currently shipping skill collection covers [`@worktif/runtime`](https://runtimeweb.com) — an AWS Lambda serverless framework for TypeScript microservices. It contains **12 skills organized across 5 layers**, each validated against real framework types by CI.
 
 ### The 5-Layer Skill Hierarchy
 
@@ -351,6 +356,51 @@ export const usersService: MicroserviceDefinition = {
 
 ---
 
+## Available Skill Collection: stdio Bus SDKs
+
+The second skill collection covers the **stdio Bus** platform itself — the C runtime and its language-specific SDKs that manage child worker processes communicating over stdin/stdout using JSON-RPC 2.0 (MCP/ACP). These skills teach agents how to build applications that create, configure, and operate a stdio Bus from C++, Node.js, or Rust.
+
+### Skills Catalog
+
+| Skill | Language | Package / Crate | Description |
+|-------|----------|-----------------|-------------|
+| **stdiobus-sdk-cpp** | C++ | `libstdio_bus` | Bus/AsyncBus classes, BusBuilder, CMake integration, error handling (status + exception modes), event loop with `step()`/`poll_fd()` |
+| **stdiobus-sdk-node** | Node.js | `@stdiobus/node` | StdioBus class, native/Docker backends, programmatic & file config, `request()`/`send()` API, TCP/Unix listener modes, ACP agent transport |
+| **stdiobus-sdk-rust** | Rust | `stdiobus-client` | Async-first (Tokio), BusBuilder, native/Docker backends, `request()`/`notify()` API, notification subscriptions, ACP protocol flow |
+
+### Common Across All SDKs
+
+All three SDKs share the same underlying C runtime and expose equivalent concepts:
+
+- **Worker pools** — JSON config with `pools[].id`, `command`, `args`, `instances`
+- **Lifecycle** — `start()` → running → `stop()` (single-use, no restart)
+- **Messaging** — JSON-RPC 2.0 over NDJSON (newline-delimited JSON)
+- **Operating modes** — Embedded (default), TCP listener, Unix socket listener
+- **Error codes** — Ok, Again, Full, Timeout (retryable) vs Invalid, State, Config, Worker, Routing, PolicyDenied (fatal)
+- **Platform support** — Linux x64/arm64, macOS x64/arm64. Windows via Docker backend only.
+
+### Skill Document Structure
+
+stdio Bus SDK skills use a simplified structure compared to Runtime Web:
+
+```yaml
+---
+name: stdiobus-sdk-{language}
+description: >
+  What this skill covers and when to use it.
+license: Apache-2.0
+compatibility: Platform and toolchain requirements
+metadata:
+  author: stdiobus
+  version: "1.0.0"
+  repository: https://github.com/stdiobus/stdiobus-{language}
+---
+```
+
+Each skill includes `references/` with API cheatsheets, config schemas, and pattern guides.
+
+---
+
 ## For AI Agents
 
 ### How to Consume Skills
@@ -369,7 +419,7 @@ sequenceDiagram
     participant G as Guardrails
 
     A->>+M: list_skills
-    M-->>-A: 12 skills, layers, status, version range
+    M-->>-A: 15 skills, layers, status, version range
 
     A->>A: Filter status = valid
 
@@ -419,6 +469,9 @@ sequenceDiagram
 | "I'm getting error Y" | `runtime-errors-and-diagnostics` | `runtime-constraints-and-guardrails` |
 | "Upgrade from 0.4 to 0.5" | `runtime-versioning-and-migration` | `runtime-api-core` |
 | "Are these skills up to date?" | `runtime-validation-and-ci` | — |
+| "Create a stdio Bus in C++" | `stdiobus-sdk-cpp` | — |
+| "Spawn workers from Node.js" | `stdiobus-sdk-node` | — |
+| "Use stdiobus in Rust with Tokio" | `stdiobus-sdk-rust` | — |
 
 ### Framework Domain Terminology
 
@@ -456,7 +509,7 @@ flowchart TB
   subgraph CONTENT["Skill Content"]
     direction TB
     MF[skills-manifest.json]
-    SK[12 × SKILL.md]
+    SK[15 × SKILL.md]
     RF[references / templates]
     SI[Search Index TF-IDF]
   end
@@ -484,7 +537,7 @@ flowchart TB
 The MCP server is a standalone Node.js executable bundled with esbuild. On startup it:
 
 1. Loads `skills-manifest.json` — the registry of all skills with layer, status, and version range
-2. Pre-loads all 12 SKILL.md files into memory
+2. Pre-loads all 15 SKILL.md files into memory
 3. Builds a TF-IDF search index with boost multipliers (name/description 3×, layerName 2×, body 1×)
 4. Registers five MCP tools and connects to stdio transport
 
@@ -497,7 +550,7 @@ agent-skills/
 ├── mcp-server.ts                     # MCP server entry point (stdio transport)
 ├── index.ts                          # Library entry point (SkillName enum, types)
 ├── types.ts                          # SkillName enum, Skill and SkillManifest interfaces
-├── skills-manifest.json              # Registry: 12 skills, layers, validation status
+├── skills-manifest.json              # Registry: 15 skills, layers, validation status
 ├── lib/
 │   ├── file-resolver.ts              # Disk I/O for skill files and manifest
 │   └── search-index.ts              # TF-IDF search index builder
@@ -524,7 +577,11 @@ agent-skills/
 ├── runtime-constraints-and-guardrails/ # Layer 4
 ├── runtime-errors-and-diagnostics/   # Layer 5
 ├── runtime-versioning-and-migration/ # Layer 5
-└── runtime-validation-and-ci/        # Layer 5
+├── runtime-validation-and-ci/        # Layer 5
+│
+├── stdiobus-sdk-cpp/                 # stdio Bus SDK (C++)
+├── stdiobus-sdk-node/                # stdio Bus SDK (Node.js)
+└── stdiobus-sdk-rust/                # stdio Bus SDK (Rust)
 ```
 
 ### Build System
@@ -581,7 +638,7 @@ yarn build
 # Type-check without emitting
 yarn typecheck
 
-# Validate all 12 skill structures (7-stage pipeline)
+# Validate all 15 skill structures (7-stage pipeline)
 yarn validate
 
 # Run all tests (Jest + fast-check)
@@ -610,7 +667,7 @@ Tests use both example-based (Jest) and property-based (fast-check) approaches:
 | `validators/` | Unit tests for each validation function (name, frontmatter, body, error catalog, terminology) |
 | `skills/` | Skill content verification (cross-references, layer assignments, content structure) |
 | `templates/` | Template compilation against real `@worktif/runtime` types |
-| `checkpoints/` | End-to-end validation of all 12 skills |
+| `checkpoints/` | End-to-end validation of all 15 skills |
 | `ci/` | CI integration tests |
 
 ### Validation Pipeline

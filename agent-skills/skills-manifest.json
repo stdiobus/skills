@@ -85,7 +85,31 @@
       "versionRange": ">=0.5.0 <1.0.0",
       "status": "valid",
       "lastValidated": "2026-05-02T12:00:00.000Z"
+    },
+    {
+      "name": "stdiobus-sdk-cpp",
+      "collection": "stdiobus-sdk",
+      "layer": 1,
+      "versionRange": ">=1.0.0",
+      "status": "valid",
+      "lastValidated": "2026-05-11T12:00:00.000Z"
+    },
+    {
+      "name": "stdiobus-sdk-node",
+      "collection": "stdiobus-sdk",
+      "layer": 1,
+      "versionRange": ">=2.0.0",
+      "status": "valid",
+      "lastValidated": "2026-05-11T12:00:00.000Z"
+    },
+    {
+      "name": "stdiobus-sdk-rust",
+      "collection": "stdiobus-sdk",
+      "layer": 1,
+      "versionRange": ">=1.1.0",
+      "status": "valid",
+      "lastValidated": "2026-05-11T12:00:00.000Z"
     }
   ],
-  "lastValidated": "2026-05-02T12:00:00.000Z"
+  "lastValidated": "2026-05-11T12:00:00.000Z"
 }
