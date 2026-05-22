@@ -14,18 +14,114 @@ const MOCK_MANIFEST: SkillManifest = {
   version: '1.0.0',
   frameworkVersion: '0.5.0-beta.2',
   skills: [
-    { name: 'runtime-concepts', layer: 1, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-lifecycle', layer: 1, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-api-core', layer: 2, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-api-integrations', layer: 2, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-patterns-http', layer: 3, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-patterns-async', layer: 3, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-patterns-data-events', layer: 3, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-ssr-and-web', layer: 3, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-constraints-and-guardrails', layer: 4, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-errors-and-diagnostics', layer: 5, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-versioning-and-migration', layer: 5, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
-    { name: 'runtime-validation-and-ci', layer: 5, versionRange: '>=0.5.0 <1.0.0', status: 'valid', lastValidated: '2026-01-01T00:00:00Z' },
+    {
+      name: 'runtime-concepts',
+      layer: 1,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-lifecycle',
+      layer: 1,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-api-core',
+      layer: 2,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-api-integrations',
+      layer: 2,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-patterns-http',
+      layer: 3,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-patterns-async',
+      layer: 3,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-patterns-data-events',
+      layer: 3,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-ssr-and-web',
+      layer: 3,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-constraints-and-guardrails',
+      layer: 4,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-errors-and-diagnostics',
+      layer: 5,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-versioning-and-migration',
+      layer: 5,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      name: 'runtime-validation-and-ci',
+      layer: 5,
+      versionRange: '>=0.5.0 <1.0.0',
+      status: 'valid',
+      lastValidated: '2026-01-01T00:00:00Z',
+    },
+    {
+      'name': 'stdiobus-sdk-cpp',
+      'collection': 'stdiobus-sdk',
+      'layer': 1,
+      'versionRange': '>=1.0.0',
+      'status': 'valid',
+      'lastValidated': '2026-05-11T12:00:00.000Z',
+    },
+    {
+      'name': 'stdiobus-sdk-node',
+      'collection': 'stdiobus-sdk',
+      'layer': 1,
+      'versionRange': '>=2.0.0',
+      'status': 'valid',
+      'lastValidated': '2026-05-11T12:00:00.000Z',
+    },
+    {
+      'name': 'stdiobus-sdk-rust',
+      'collection': 'stdiobus-sdk',
+      'layer': 1,
+      'versionRange': '>=1.1.0',
+      'status': 'valid',
+      'lastValidated': '2026-05-11T12:00:00.000Z',
+    },
   ],
   lastValidated: '2026-01-01T00:00:00Z',
 };
@@ -59,7 +155,7 @@ describe('handleListSkills()', () => {
     const result = await handleListSkills(resolver);
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.skills).toHaveLength(12);
+    expect(parsed.skills).toHaveLength(15);
   });
 
   it('includes required fields for each skill entry', async () => {

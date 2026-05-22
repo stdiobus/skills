@@ -9,7 +9,7 @@
  * Values are kebab-case strings matching the skill directory names.
  */
 export enum SkillName {
-  // Runtime Web collection (12 skills, 5 layers)
+  // Runtime Web collection (15 skills, 5 layers)
   RuntimeConcepts = 'runtime-concepts',
   RuntimeLifecycle = 'runtime-lifecycle',
   RuntimeApiCore = 'runtime-api-core',

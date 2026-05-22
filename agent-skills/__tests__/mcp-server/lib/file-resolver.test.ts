@@ -33,13 +33,13 @@ describe('createFileResolver()', () => {
   });
 
   describe('readManifest()', () => {
-    it('returns a valid SkillManifest with 12 skills', async () => {
+    it('returns a valid SkillManifest with 15 skills', async () => {
       const manifest = await resolver.readManifest();
 
       expect(manifest).toBeDefined();
       expect(manifest.version).toBe('1.0.0');
       expect(manifest.frameworkVersion).toBe('0.5.0-beta.2');
-      expect(manifest.skills).toHaveLength(12);
+      expect(manifest.skills).toHaveLength(15);
       expect(manifest.lastValidated).toBeDefined();
     });
 
@@ -229,7 +229,7 @@ describe('createFileResolver()', () => {
       const customResolver = createFileResolver(PACKAGE_ROOT);
       const manifest = await customResolver.readManifest();
 
-      expect(manifest.skills).toHaveLength(12);
+      expect(manifest.skills).toHaveLength(15);
     });
 
     it('fails gracefully with an invalid package root', async () => {

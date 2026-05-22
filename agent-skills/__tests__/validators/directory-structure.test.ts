@@ -55,7 +55,7 @@ function extractFileReferences(content: string): string[] {
 
 describe('Property 4: Skill Directory Structure Integrity', () => {
   describe('Each skill directory exists and contains SKILL.md', () => {
-    // This is a concrete check for all 12 skills — the "property" is that
+    // This is a concrete check for all 15 skills — the "property" is that
     // for ANY skill in the set, the structural invariants hold.
     it('all 12 skill directories exist under agent-skills/', () => {
       for (const skillName of ALL_SKILLS) {

@@ -78,7 +78,7 @@ uses the targeted framework version, the code will compile without type errors.*
 
 ### skills-manifest.json Structure
 
-The manifest tracks validation state for all 12 skills:
+The manifest tracks validation state for all 15 skills:
 
 ```json
 {

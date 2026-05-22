@@ -13,7 +13,7 @@ import { LAYER_ASSIGNMENT, SkillFrontmatter } from '../../scripts/validate-skill
 const SKILLS_ROOT = path.resolve(__dirname, '../../');
 
 /**
- * Expected layer assignments for all 12 skills.
+ * Expected layer assignments for all 15 skills.
  */
 const EXPECTED_LAYERS: Record<string, { layer: string; layerName: string }> = {
   // Layer 1: Concepts & Product
@@ -205,8 +205,8 @@ describe('Layer Metadata Verification (Requirements 16.1–16.5)', () => {
   });
 
   describe('LAYER_ASSIGNMENT constant consistency', () => {
-    it('LAYER_ASSIGNMENT contains all 12 skills', () => {
-      expect(Object.keys(LAYER_ASSIGNMENT).length).toBe(12);
+    it('LAYER_ASSIGNMENT contains all 15 skills', () => {
+      expect(Object.keys(LAYER_ASSIGNMENT).length).toBe(15);
     });
 
     for (const [skillName, expected] of Object.entries(EXPECTED_LAYERS)) {

@@ -64,6 +64,9 @@ export const LAYER_ASSIGNMENT: Record<string, { layer: number; layerName: string
   'runtime-errors-and-diagnostics': { layer: 5, layerName: 'Diagnostics' },
   'runtime-versioning-and-migration': { layer: 5, layerName: 'Diagnostics' },
   'runtime-validation-and-ci': { layer: 5, layerName: 'Diagnostics' },
+  "stdiobus-sdk-cpp": { layer: 1, layerName: 'Concepts' },
+  "stdiobus-sdk-node": { layer: 1, layerName: 'Concepts' },
+  "stdiobus-sdk-rust": { layer: 1, layerName: 'Concepts' }
 };
 
 // ---------------------------------------------------------------------------

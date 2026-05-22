@@ -232,7 +232,7 @@ async function main(): Promise<void> {
       );
       const skills = JSON.parse(result);
       assert(Array.isArray(skills), 'SkillName values is not an array');
-      assert(skills.length === 12, `Expected 12 skills, got ${skills.length}`);
+      assert(skills.length === 12, `Expected 15 skills, got ${skills.length}`);
       assert(skills.includes('runtime-concepts'), 'Missing runtime-concepts');
       assert(skills.includes('runtime-patterns-http'), 'Missing runtime-patterns-http');
     });
@@ -244,7 +244,7 @@ async function main(): Promise<void> {
       );
       const data = JSON.parse(result);
       assert(data.v === '1.0.0', `Expected version 1.0.0, got ${data.v}`);
-      assert(data.c === 12, `Expected 12 skills, got ${data.c}`);
+      assert(data.c === 12, `Expected 15 skills, got ${data.c}`);
     });
 
     // ─── 3. Skill content ──────────────────────────────────────
@@ -347,11 +347,11 @@ async function main(): Promise<void> {
         assert(JSON.stringify(names) === JSON.stringify(expected), `Unexpected tools: ${names.join(', ')}`);
       });
 
-      await checkAsync('list_skills returns 12 skills with layers', async () => {
+      await checkAsync('list_skills returns 15 skills with layers', async () => {
         const resp = await client!.send('tools/call', { name: 'list_skills', arguments: {} });
         assert(resp.result?.content?.[0]?.text != null, 'No content in list_skills response');
         const manifest = JSON.parse(resp.result.content[0].text);
-        assert(manifest.skills?.length === 12, `Expected 12 skills, got ${manifest.skills?.length}`);
+        assert(manifest.skills?.length === 12, `Expected 15 skills, got ${manifest.skills?.length}`);
         for (const skill of manifest.skills) {
           assert(typeof skill.name === 'string', `Skill missing name`);
           assert(typeof skill.layer === 'number', `Skill ${skill.name} missing layer`);
