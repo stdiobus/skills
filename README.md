@@ -51,7 +51,7 @@ This is not documentation for humans. It is a **machine-readable knowledge base*
 
 There is no established standard for delivering structured, validated knowledge to AI agents over MCP. This project introduces the concept of **agentic skills** — machine-parseable, CI-validated skill documents served as MCP tools over stdio. The architecture, skill schema, validation pipeline, and delivery infrastructure are production-ready and designed to support multiple independent skill collections.
 
-The first skill collection — **Runtime Web** — ships with the package. It contains **15 skills across 5 layers** that teach agents how to generate correct, type-safe code for [`@worktif/runtime`](https://runtimeweb.com), an AWS Lambda serverless framework for TypeScript microservices.
+The first skill collection — **Runtime Web** — ships with the package. It contains **12 skills across 5 layers** that teach agents how to generate correct, type-safe code for [`@worktif/runtime`](https://runtimeweb.com), an AWS Lambda serverless framework for TypeScript microservices.
 
 The second collection — **stdio Bus SDKs** — provides **3 skills** covering the C++, Node.js, and Rust SDKs for [stdio Bus](https://github.com/stdiobus) itself. These teach agents how to build applications that manage worker processes over JSON-RPC/NDJSON transport.
 
