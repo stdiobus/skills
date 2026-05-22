@@ -79,6 +79,7 @@ export function createFileResolver(packageRootOverride?: string): FileResolver {
     },
 
     async readManifest(): Promise<SkillManifest> {
+      // @toto: include merging by custom manifest
       const manifestPath = path.join(packageRoot, 'agent-skills', 'skills-manifest.json');
       const content = await fs.readFile(manifestPath, 'utf-8');
       return JSON.parse(content) as SkillManifest;

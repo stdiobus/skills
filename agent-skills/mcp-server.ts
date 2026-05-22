@@ -47,41 +47,51 @@ async function main(): Promise<void> {
 
   // --- Tool registrations ---
 
-  server.tool(
+  server.registerTool(
     'list_skills',
-    'List all available skills with their layers and metadata',
-    {},
+    {
+      description: 'List all available skills with their layers and metadata',
+      inputSchema: {},
+    },
     async () => handleListSkills(resolver),
   );
 
-  server.tool(
+  server.registerTool(
     'read_skill',
-    'Read the full SKILL.md content for a specific skill',
-    { skill: z.enum(VALID_SKILLS) },
+    {
+      description: 'Read the full SKILL.md content for a specific skill',
+      inputSchema: { skill: z.enum(VALID_SKILLS) },
+    },
     async (args) => handleReadSkill(args, resolver),
   );
 
-  server.tool(
+  server.registerTool(
     'list_references',
-    'List reference files available for a specific skill',
-    { skill: z.enum(VALID_SKILLS) },
+    {
+      description: 'List reference files available for a specific skill',
+      inputSchema: { skill: z.enum(VALID_SKILLS) },
+    },
     async (args) => handleListReferences(args, resolver),
   );
 
-  server.tool(
+  server.registerTool(
     'read_reference',
-    'Read a specific reference file for a skill',
     {
-      skill: z.enum(VALID_SKILLS),
-      reference: z.string().min(1),
+      description: 'Read a specific reference file for a skill',
+      inputSchema: {
+        skill: z.enum(VALID_SKILLS),
+        reference: z.string().min(1),
+      },
     },
     async (args) => handleReadReference(args, resolver),
   );
 
-  server.tool(
+  server.registerTool(
     'search_skills',
-    'Search skills by keyword or topic',
-    { query: z.string().min(1) },
+    {
+      description: 'Search skills by keyword or topic',
+      inputSchema: { query: z.string().min(1) },
+    },
     async (args) => handleSearchSkills(args, searchIndex),
   );
 
