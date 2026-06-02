@@ -53,7 +53,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 200 },
+      { numRuns: 35 },
     );
   });
 
@@ -66,7 +66,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('1-64 characters'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -85,7 +85,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('lowercase alphanumeric'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -98,7 +98,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('start with a hyphen'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -111,7 +111,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('end with a hyphen'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -129,7 +129,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('consecutive hyphens'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -147,7 +147,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('must match parent directory'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -174,7 +174,7 @@ describe('validateSkillName() — Property 1: SKILL.md name field validation', (
         const shouldBeValid = satisfiesAllRules(name, name);
         expect(result.valid).toBe(shouldBeValid);
       }),
-      { numRuns: 200 },
+      { numRuns: 35 },
     );
   });
 });

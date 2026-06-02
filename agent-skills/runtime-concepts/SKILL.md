@@ -45,6 +45,8 @@ configure integrations, and deploy infrastructure via AWS CDK.
 - Typed Ties pattern for service resolution
 - Cold-start optimization via the Snapshot pattern
 - AWS CDK constructs for infrastructure deployment
+- Multi-platform deployment from a single configuration
+- An optional acceleration seam for integrating product plugins (e.g. Lambda Kata)
 - Optional server-side rendered React support
 
 ### Scope: What IS Supported
@@ -53,6 +55,8 @@ configure integrations, and deploy infrastructure via AWS CDK.
 - HTTP APIs via API Gateway (v2 HTTP API or v1 REST API)
 - Async event processing: SQS, EventBridge, SNS, Kinesis, S3 integrations, DynamoDB Streams, scheduled tasks
 - CDK infrastructure deployment (multi-stack model)
+- Multi-platform deployment (deploy one app to multiple platforms/regions/accounts)
+- Optional Lambda acceleration via product plugins (Lambda Kata, default OFF)
 - Optional SSR React with hydration
 - AWS SDK v3 modular imports
 
@@ -197,6 +201,27 @@ new RuntimeWebStack(app, 'MyApp-API-dev', {
   platformName: 'web',
 });
 ```
+
+### Multi-Platform Deployment
+
+`RuntimeConfig.platforms` lets one application deploy to multiple named platforms
+(e.g. different regions or AWS accounts) from a single configuration. Each
+platform may override `awsRegion`, `features`, `awake`, and `acceleration`;
+overrides are shallow-merged over the global config. When no platforms are
+declared, a single default platform is used. See
+[runtime-multiplatform](../runtime-multiplatform/SKILL.md) (Layer 3: Patterns).
+
+### The Acceleration Seam (Product Plugins)
+
+The framework integrates external products as Lambda **acceleration providers**
+through a single provider-agnostic seam at the microservice Lambda chokepoint
+(`LambdaBuilder.buildLambda()`). The first provider is **Lambda Kata**
+(`@lambdakata/cdk`, an optional peer dependency). Acceleration is configured via
+`acceleration: { kata: { enabled, unlicensedBehavior } }` and is **OFF by
+default** — when unused, the optional dependency is never loaded and framework
+behavior is unchanged. The config is an object so future providers are added as
+sibling keys.
+See [runtime-acceleration](../runtime-acceleration/SKILL.md) (Layer 3: Patterns).
 
 ## Instructions
 

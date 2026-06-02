@@ -326,7 +326,7 @@ describe('MCP Protocol Integration Tests', () => {
 
         const manifest = JSON.parse(response.result.content[0].text);
         expect(manifest.version).toBe('1.0.0');
-        expect(manifest.skills).toHaveLength(15);
+        expect(manifest.skills).toHaveLength(17);
         expect(manifest.skills[0].name).toBeDefined();
         expect(manifest.skills[0].layer).toBeDefined();
       });
@@ -557,7 +557,7 @@ describe('MCP Protocol Integration Tests', () => {
         expect(response.result).toBeDefined();
         expect(response.result.isError).toBeUndefined();
         const manifest = JSON.parse(response.result.content[0].text);
-        expect(manifest.skills).toHaveLength(15);
+        expect(manifest.skills).toHaveLength(17);
       });
     });
 
@@ -572,7 +572,7 @@ describe('MCP Protocol Integration Tests', () => {
           arguments: {},
         });
         const manifest = JSON.parse(listResponse.result.content[0].text);
-        expect(manifest.skills).toHaveLength(15);
+        expect(manifest.skills).toHaveLength(17);
 
         // Step 2: Read the first skill
         const firstSkill = manifest.skills[0].name;

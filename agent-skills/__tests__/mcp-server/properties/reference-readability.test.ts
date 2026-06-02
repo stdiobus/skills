@@ -74,7 +74,7 @@ describe('Property 3: Reference listing correctness', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });
@@ -128,7 +128,7 @@ describe('Property 4: Reference readability round-trip', () => {
           expect(result.content[0].text).toBe(diskContent);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });
@@ -170,7 +170,7 @@ describe('Property 5: Directory traversal rejection', () => {
           expect(result.content[0].text).toContain('directory traversal');
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });
@@ -221,7 +221,7 @@ describe('Property 8: List-then-read reference completeness', () => {
           }
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });

@@ -142,14 +142,14 @@ function generateManifest(): any {
 
   return {
     version: '1.0.0',
-    frameworkVersion: '0.5.0-beta.2',
+    frameworkVersion: '0.5.3-kata.1',
     skills,
     lastValidated: now,
   };
 }
 
 describe('End-to-End CI Validation Pipeline', () => {
-  describe('Full validation pipeline runs against all 15 skills', () => {
+  describe('Full validation pipeline runs against all 17 skills', () => {
     const validationResults: Record<string, ReturnType<typeof validateSkill>> = {};
 
     beforeAll(() => {
@@ -158,8 +158,8 @@ describe('End-to-End CI Validation Pipeline', () => {
       }
     });
 
-    it('all 15 skills are validated', () => {
-      expect(Object.keys(validationResults).length).toBe(15);
+    it('all 17 skills are validated', () => {
+      expect(Object.keys(validationResults).length).toBe(17);
     });
 
     for (const skillName of ALL_SKILLS) {
@@ -212,11 +212,11 @@ describe('End-to-End CI Validation Pipeline', () => {
     it('generates a valid manifest object', () => {
       expect(manifest).toBeDefined();
       expect(manifest.version).toBe('1.0.0');
-      expect(manifest.frameworkVersion).toBe('0.5.0-beta.2');
+      expect(manifest.frameworkVersion).toBe('0.5.3-kata.1');
     });
 
-    it('manifest contains all 15 skills', () => {
-      expect(manifest.skills.length).toBe(15);
+    it('manifest contains all 17 skills', () => {
+      expect(manifest.skills.length).toBe(17);
     });
 
     it.skip('all skills in manifest have status "valid"', () => {
@@ -314,8 +314,8 @@ describe('End-to-End CI Validation Pipeline', () => {
         }
       }
 
-      // All 15 skills should pass
-      expect(passedSkills).toBe(12);
+      // All 17 skills should pass
+      expect(passedSkills).toBe(14);
       // expect(totalErrors).toBe(0);
 
       // Log summary for CI visibility

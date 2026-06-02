@@ -129,6 +129,11 @@ yarn deploy:dev        # 3. Fix deployment errors
 - Fix: Add via CDK L2 grant methods (e.g., `bucket.grantRead(fn)`)
 - Rule: Do NOT use wildcard `*` permissions or `AdministratorAccess`
 
+**DEPLOY-005: Acceleration Package Not Installed** (`AccelerationPackageNotInstalledError` / `'@lambdakata/cdk' is not installed`)
+- Cause: `acceleration.kata.enabled: true` with `unlicensedBehavior: 'fail'` but the optional peer `@lambdakata/cdk` is not installed
+- Fix: Install it (`npm i @lambdakata/cdk`), OR set `unlicensedBehavior: 'warn'` to skip gracefully, OR set `acceleration.kata.enabled: false`
+- Rule: Do NOT bundle or vendor the package; it is an externalized optional peer. Do NOT remove the lazy `require` isolation
+
 ### Runtime Errors
 
 **RUNTIME-001: Missing Service in DI Container** (`No matching bindings found`)
@@ -283,4 +288,5 @@ const handler: LambdaDefinition<MyTies> = {
 - [runtime-constraints-and-guardrails](../runtime-constraints-and-guardrails/SKILL.md) (Layer 4: Guardrails) — Constraints that prevent errors
 - [runtime-api-core](../runtime-api-core/SKILL.md) (Layer 2: API) — Correct type signatures
 - [runtime-api-integrations](../runtime-api-integrations/SKILL.md) (Layer 2: API) — Integration config interfaces
+- [runtime-acceleration](../runtime-acceleration/SKILL.md) (Layer 3: Patterns) — Acceleration config and the package-not-installed error
 - [runtime-versioning-and-migration](../runtime-versioning-and-migration/SKILL.md) (Layer 5: Diagnostics) — Version-specific error differences

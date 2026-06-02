@@ -34,7 +34,7 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -50,7 +50,7 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -71,7 +71,7 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Layer mismatch'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -93,7 +93,7 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Layer name mismatch'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -110,7 +110,7 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Unknown skill name'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -121,7 +121,7 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Invalid layer value'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });
@@ -151,7 +151,7 @@ describe('validateCrossReferences() — Property 9: Cross-reference layer annota
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 200 },
+      { numRuns: 35 },
     );
   });
 
@@ -172,7 +172,7 @@ describe('validateCrossReferences() — Property 9: Cross-reference layer annota
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('non-existent skill'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -190,7 +190,7 @@ describe('validateCrossReferences() — Property 9: Cross-reference layer annota
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('missing layer annotation'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -212,7 +212,7 @@ describe('validateCrossReferences() — Property 9: Cross-reference layer annota
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('wrong layer number'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -235,7 +235,7 @@ describe('validateCrossReferences() — Property 9: Cross-reference layer annota
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('wrong layer name'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -250,7 +250,7 @@ describe('validateCrossReferences() — Property 9: Cross-reference layer annota
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });

@@ -18,6 +18,8 @@ export enum SkillName {
   RuntimePatternsAsync = 'runtime-patterns-async',
   RuntimePatternsDataEvents = 'runtime-patterns-data-events',
   RuntimeSsrAndWeb = 'runtime-ssr-and-web',
+  RuntimeMultiplatform = 'runtime-multiplatform',
+  RuntimeAccelerator= 'runtime-acceleration',
   RuntimeConstraintsAndGuardrails = 'runtime-constraints-and-guardrails',
   RuntimeErrorsAndDiagnostics = 'runtime-errors-and-diagnostics',
   RuntimeVersioningAndMigration = 'runtime-versioning-and-migration',

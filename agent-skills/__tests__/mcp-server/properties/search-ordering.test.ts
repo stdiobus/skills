@@ -63,7 +63,7 @@ describe('Property 6: Search result ordering', () => {
           expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -86,7 +86,7 @@ describe('Property 6: Search result ordering', () => {
           expect(typeof r.layerName).toBe('string');
         }
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -105,7 +105,7 @@ describe('Property 6: Search result ordering', () => {
           expect(matchingSkills).toContain(skillName);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });

@@ -226,6 +226,33 @@ only 8 integration kinds. Projects on beta.2+ have all 9.
 
 `AuthConfigCustom` (with `authorizerLambda` field) was added in 0.5.0-beta.2.
 
+### Additive Features Within 0.5.x (Non-Breaking)
+
+The following capabilities were added later in the `0.5.x` line. They are
+**purely additive and non-breaking** — both default to OFF/absent, so existing
+projects require **no migration** and produce identical output until opted into:
+
+#### 1. Multi-Platform Deployment (`RuntimeConfig.platforms`)
+
+- Optional `platforms: PlatformConfig[]` on `RuntimeConfig`, the `platformName`
+  prop on all stacks, and the `--platform` CLI flag on `deploy`/`destroy`.
+- Absent `platforms` ⇒ a single default platform with identical resource naming
+  to before the feature existed.
+- No migration required. To adopt, add a `platforms` array and (optionally) pass
+  `platformName` to stacks. See
+  [runtime-multiplatform](../runtime-multiplatform/SKILL.md) (Layer 3: Patterns).
+
+#### 2. Acceleration / Product Plugins (`acceleration.kata`)
+
+- Optional `acceleration: { kata: { enabled, unlicensedBehavior } }` on
+  `RuntimeConfig` and `PlatformConfig`, plus per-lambda `config.kata.enabled`.
+- Introduces a new OPTIONAL peer dependency `@lambdakata/cdk` (only needed when
+  acceleration is enabled). Default OFF ⇒ dependency never loaded, CloudFormation
+  byte-identical.
+- No migration required. To adopt, install `@lambdakata/cdk` and set
+  `acceleration.kata.enabled: true`. See
+  [runtime-acceleration](../runtime-acceleration/SKILL.md) (Layer 3: Patterns).
+
 ### Migration Guide: Array-Based to Object-Based Ties
 
 This is the most common migration consumers need to perform. Follow these steps
@@ -426,5 +453,7 @@ const handler: LambdaDefinition<MyTies> = {
 - [Migration Guides](references/migration-guides.md) — Step-by-step migration paths with code diffs
 - [runtime-api-core](../runtime-api-core/SKILL.md) (Layer 2: API) — Current type signatures (0.5.0+)
 - [runtime-concepts](../runtime-concepts/SKILL.md) (Layer 1: Concepts) — Core domain model
+- [runtime-multiplatform](../runtime-multiplatform/SKILL.md) (Layer 3: Patterns) — Multi-platform deployment (additive 0.5.x feature)
+- [runtime-acceleration](../runtime-acceleration/SKILL.md) (Layer 3: Patterns) — Acceleration / product plugins (additive 0.5.x feature)
 - [runtime-errors-and-diagnostics](../runtime-errors-and-diagnostics/SKILL.md) (Layer 5: Diagnostics) — Error resolution after upgrades
 - [runtime-validation-and-ci](../runtime-validation-and-ci/SKILL.md) (Layer 5: Diagnostics) — How skills are validated against framework versions

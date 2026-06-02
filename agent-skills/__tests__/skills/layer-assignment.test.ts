@@ -13,7 +13,7 @@ import { LAYER_ASSIGNMENT, SkillFrontmatter } from '../../scripts/validate-skill
 const SKILLS_ROOT = path.resolve(__dirname, '../../');
 
 /**
- * Expected layer assignments for all 15 skills.
+ * Expected layer assignments for all 17 skills.
  */
 const EXPECTED_LAYERS: Record<string, { layer: string; layerName: string }> = {
   // Layer 1: Concepts & Product
@@ -27,6 +27,8 @@ const EXPECTED_LAYERS: Record<string, { layer: string; layerName: string }> = {
   'runtime-patterns-async': { layer: '3', layerName: 'Patterns' },
   'runtime-patterns-data-events': { layer: '3', layerName: 'Patterns' },
   'runtime-ssr-and-web': { layer: '3', layerName: 'Patterns' },
+  'runtime-multiplatform': { layer: '3', layerName: 'Patterns' },
+  'runtime-acceleration': { layer: '3', layerName: 'Patterns' },
   // Layer 4: Guardrails
   'runtime-constraints-and-guardrails': { layer: '4', layerName: 'Guardrails' },
   // Layer 5: Diagnostics & Evolution
@@ -129,6 +131,8 @@ describe('Layer Metadata Verification (Requirements 16.1–16.5)', () => {
       'runtime-patterns-async',
       'runtime-patterns-data-events',
       'runtime-ssr-and-web',
+      'runtime-multiplatform',
+      'runtime-acceleration',
     ];
 
     for (const skillName of layer3Skills) {
@@ -205,8 +209,8 @@ describe('Layer Metadata Verification (Requirements 16.1–16.5)', () => {
   });
 
   describe('LAYER_ASSIGNMENT constant consistency', () => {
-    it('LAYER_ASSIGNMENT contains all 15 skills', () => {
-      expect(Object.keys(LAYER_ASSIGNMENT).length).toBe(15);
+    it('LAYER_ASSIGNMENT contains all 17 skills', () => {
+      expect(Object.keys(LAYER_ASSIGNMENT).length).toBe(17);
     });
 
     for (const [skillName, expected] of Object.entries(EXPECTED_LAYERS)) {

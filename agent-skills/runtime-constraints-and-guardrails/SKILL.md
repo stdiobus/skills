@@ -52,6 +52,20 @@ them causes deployment failures, runtime errors, or build breakage.
 | SSR render time | <500ms target | Performance budget |
 | API Gateway timeout | 29s | AWS hard limit |
 
+### Acceleration Constraints (Lambda Kata / Product Plugins)
+
+Acceleration is an optional, provider-based capability. These constraints keep it
+safe and non-invasive:
+
+| Constraint | Rule |
+|-----------|------|
+| Default state | OFF. Absent/`enabled: false` ⇒ byte-identical CloudFormation; optional dependency never loaded |
+| Scope | Microservice Lambdas ONLY (the `LambdaBuilder` chokepoint). SSR and RuntimeAwake Lambdas are NOT accelerated |
+| Dependency | `@lambdakata/cdk` is an OPTIONAL peer dependency, externalized in all builds, loaded lazily only at CDK synth |
+| `unlicensedBehavior` | `'warn'` (default) skips gracefully; `'fail'` aborts synth. Resolved at platform/global scope only — never per-lambda |
+| Per-lambda override | `config.kata.enabled` toggles a single Lambda; it is `enabled`-only |
+| Local path | Local handler execution NEVER loads `@lambdakata/cdk` (acceleration applies only at synth/deploy) |
+
 ### NOT SUPPORTED List
 
 The following features, technologies, and patterns are NOT supported by
@@ -126,6 +140,17 @@ If code uses L1 CloudFormation constructs (`CfnBucket`, `CfnFunction`, etc.),
 the ONLY correct response is to replace them with L2/L3 constructs
 (`Bucket`, `Function`, etc.).
 
+**RULE 7 — Acceleration Default-OFF and Scope:**
+If a consumer enables `acceleration.kata`, the ONLY correct guidance is:
+1. It applies to microservice Lambdas only (NOT SSR or RuntimeAwake Lambdas).
+2. `@lambdakata/cdk` must be installed (optional peer dependency); under
+   `unlicensedBehavior: 'fail'` a missing package aborts synth, under `'warn'`
+   it is skipped.
+3. Do NOT claim any behavior change for consumers who have not opted in —
+   default-OFF is byte-identical to pre-feature output.
+Do NOT add `unlicensedBehavior` to a per-lambda override; it resolves only at
+platform/global scope.
+
 See [Decision Rules Reference](references/decision-rules.md) for the complete
 structured list.
 
@@ -144,6 +169,7 @@ to keep bundles under 10MB:
 **ALWAYS externalize in CDK builds:**
 - `aws-cdk-lib`
 - `constructs`
+- `@lambdakata/cdk` and its native addon scopes (`@lambdakata/*`, `@lambda-kata/*`) — optional acceleration provider, never bundled
 
 **Safe to bundle (small utilities):**
 - Packages under 100KB
@@ -409,5 +435,7 @@ categorized list of ❌/✅ pairs.
 - [runtime-concepts](../runtime-concepts/SKILL.md) (Layer 1: Concepts) — Product definition and scope boundaries
 - [runtime-api-core](../runtime-api-core/SKILL.md) (Layer 2: API) — Core type signatures and constraints
 - [runtime-api-integrations](../runtime-api-integrations/SKILL.md) (Layer 2: API) — Integration types and NOT SUPPORTED rule
+- [runtime-multiplatform](../runtime-multiplatform/SKILL.md) (Layer 3: Patterns) — Multi-platform deployment and shallow-merge resolution
+- [runtime-acceleration](../runtime-acceleration/SKILL.md) (Layer 3: Patterns) — Acceleration seam, default-OFF, and scope
 - [runtime-errors-and-diagnostics](../runtime-errors-and-diagnostics/SKILL.md) (Layer 5: Diagnostics) — Error resolution when constraints are violated
 - [runtime-versioning-and-migration](../runtime-versioning-and-migration/SKILL.md) (Layer 5: Diagnostics) — Version-specific constraint differences

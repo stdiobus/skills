@@ -1,7 +1,7 @@
 // =============================================================================
 // CI Validation Script: Agent Skills Structural Validation
 // Feature: runtime-web-agent-skills
-// Purpose: Validates all 12 agent skills conform to agentskills.io specification
+// Purpose: Validates all agent skills conform to agentskills.io specification
 // =============================================================================
 
 /**
@@ -60,6 +60,8 @@ export const LAYER_ASSIGNMENT: Record<string, { layer: number; layerName: string
   'runtime-patterns-async': { layer: 3, layerName: 'Patterns' },
   'runtime-patterns-data-events': { layer: 3, layerName: 'Patterns' },
   'runtime-ssr-and-web': { layer: 3, layerName: 'Patterns' },
+  'runtime-multiplatform': { layer: 3, layerName: 'Patterns' },
+  'runtime-acceleration': { layer: 3, layerName: 'Patterns' },
   'runtime-constraints-and-guardrails': { layer: 4, layerName: 'Guardrails' },
   'runtime-errors-and-diagnostics': { layer: 5, layerName: 'Diagnostics' },
   'runtime-versioning-and-migration': { layer: 5, layerName: 'Diagnostics' },
@@ -585,7 +587,7 @@ export function validateLayerAssignment(
   const expected = LAYER_ASSIGNMENT[skillName];
 
   if (!expected) {
-    errors.push(`Unknown skill name: "${skillName}" — not in the 12-skill set`);
+    errors.push(`Unknown skill name: "${skillName}" — not in the skill set`);
     return { valid: false, errors, warnings };
   }
 

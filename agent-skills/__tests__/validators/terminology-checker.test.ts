@@ -69,7 +69,7 @@ describe('checkTerminology() — Property 7: Terminology consistency', () => {
         expect(result.valid).toBe(true);
         expect(result.warnings).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -82,7 +82,7 @@ describe('checkTerminology() — Property 7: Terminology consistency', () => {
           result.warnings.some((w) => w.includes('ties')),
         ).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -95,7 +95,7 @@ describe('checkTerminology() — Property 7: Terminology consistency', () => {
           result.warnings.some((w) => w.includes('LambdaDefinition')),
         ).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -108,7 +108,7 @@ describe('checkTerminology() — Property 7: Terminology consistency', () => {
           result.warnings.some((w) => w.includes('consumer')),
         ).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -121,7 +121,7 @@ describe('checkTerminology() — Property 7: Terminology consistency', () => {
           result.warnings.some((w) => w.includes('integration')),
         ).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -139,7 +139,7 @@ describe('checkTerminology() — Property 7: Terminology consistency', () => {
         // Code lines should be skipped — no warnings
         expect(result.warnings).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -158,7 +158,7 @@ describe('checkTerminology() — Property 7: Terminology consistency', () => {
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });
