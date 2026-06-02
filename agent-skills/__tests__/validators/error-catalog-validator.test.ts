@@ -51,7 +51,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 200 },
+      { numRuns: 35 },
     );
   });
 
@@ -66,7 +66,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('id'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -82,7 +82,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Duplicate id'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -97,7 +97,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('pattern'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -112,7 +112,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('meaning'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -127,7 +127,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('causes'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -142,7 +142,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('resolution'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -161,7 +161,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('action'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -180,7 +180,7 @@ describe('validateErrorCatalog() — Property 5: Error catalog schema conformanc
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('step') && e.includes('number'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });

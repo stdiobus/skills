@@ -378,7 +378,7 @@ validate-skills:
 
 ## Performance
 
-The full validation pipeline completes in under 30 seconds for all 15 skills:
+The full validation pipeline completes in under 30 seconds for all 17 skills:
 - Structural validation: ~2s (file I/O + parsing)
 - Template compilation: ~15s (TypeScript compiler)
 - API existence: ~3s (export analysis)

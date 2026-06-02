@@ -8,14 +8,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  validateSkillName,
-  validateFrontmatter,
-  validateBodyStructure,
   checkTerminology,
-  validateLayerAssignment,
-  validateCrossReferences,
   LAYER_ASSIGNMENT,
   SkillFrontmatter,
+  validateBodyStructure,
+  validateCrossReferences,
+  validateFrontmatter,
+  validateLayerAssignment,
+  validateSkillName,
 } from '../../scripts/validate-skills';
 
 const SKILLS_ROOT = path.resolve(__dirname, '../../');

@@ -22,6 +22,8 @@ const ALL_SKILLS = [
   'runtime-patterns-async',
   'runtime-patterns-data-events',
   'runtime-ssr-and-web',
+  'runtime-multiplatform',
+  'runtime-acceleration',
   'runtime-constraints-and-guardrails',
   'runtime-errors-and-diagnostics',
   'runtime-versioning-and-migration',
@@ -116,7 +118,7 @@ describe('Cross-Reference Verification (Requirement 16.7)', () => {
   });
 
   describe('All cross-reference targets exist', () => {
-    it('every referenced skill exists in the 12-skill set', () => {
+    it('every referenced skill exists in the skill set', () => {
       const invalidRefs = allReferences.filter(
         (ref) => !ALL_SKILL_NAMES.has(ref.targetSkill),
       );
@@ -173,6 +175,8 @@ describe('Cross-Reference Verification (Requirement 16.7)', () => {
         'runtime-patterns-async',
         'runtime-patterns-data-events',
         'runtime-ssr-and-web',
+        'runtime-multiplatform',
+        'runtime-acceleration',
       ];
 
       for (const skillName of layer3Skills) {

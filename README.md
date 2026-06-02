@@ -15,7 +15,7 @@
   <a href="https://esbuild.github.io"><img src="https://img.shields.io/badge/build-esbuild-yellow?style=for-the-badge&logo=esbuild" alt="Build" /></a>
 </p>
 <p align="center">
-  <a href="#available-skill-collection-runtime-web"><img src="https://img.shields.io/badge/skills-15-4a90e2?style=for-the-badge" alt="Skills" /></a>
+  <a href="#available-skill-collection-runtime-web"><img src="https://img.shields.io/badge/skills-17-4a90e2?style=for-the-badge" alt="Skills" /></a>
   <a href="#the-5-layer-skill-hierarchy"><img src="https://img.shields.io/badge/layers-5-50c878?style=for-the-badge" alt="Layers" /></a>
   <a href="#mcp-tool-interface"><img src="https://img.shields.io/badge/MCP%20tools-5-8A2BE2?style=for-the-badge" alt="MCP Tools" /></a>
   <a href="https://aws.amazon.com/lambda"><img src="https://img.shields.io/badge/AWS-Lambda-FF9900?style=for-the-badge&logo=awslambda&logoColor=white" alt="AWS Lambda" /></a>
@@ -100,7 +100,7 @@ sequenceDiagram
     participant D as Skill Content
 
     A->>+S: list_skills
-    S-->>-A: 15 skills, layers, status, version range
+    S-->>-A: 17 skills, layers, status, version range
 
     A->>+S: read_skill { skill: "runtime-patterns-http" }
     S->>+D: Load SKILL.md
@@ -145,7 +145,7 @@ yarn add @stdiobus/skills
 import { SkillName } from '@stdiobus/skills';
 import manifest from '@stdiobus/skills/skills-manifest';
 
-console.log(manifest.skills.length);        // 15
+console.log(manifest.skills.length);        // 17
 console.log(manifest.frameworkVersion);      // "0.5.0-beta.2"
 console.log(SkillName.RuntimePatternsHttp); // "runtime-patterns-http"
 ```
@@ -168,7 +168,7 @@ The npm package includes:
 - `out/dist/index.mjs` — ESM library bundle (minified, tree-shaken)
 - `out/dist/mcp-server.mjs` — Executable MCP server (standalone, shebang)
 - `out/tsc/**/*.d.ts` — TypeScript declarations
-- `agent-skills/**/SKILL.md` — All 15 skill documents
+- `agent-skills/**/SKILL.md` — All 17 skill documents
 - `agent-skills/**/references/**` — Reference materials, templates, error catalog
 - `agent-skills/skills-manifest.json` — Skill registry with validation status
 
@@ -176,7 +176,7 @@ The npm package includes:
 
 ## Available Skill Collection: Runtime Web
 
-The first and currently shipping skill collection covers [`@worktif/runtime`](https://runtimeweb.com) — an AWS Lambda serverless framework for TypeScript microservices. It contains **15 skills organized across 5 layers**, each validated against real framework types by CI.
+The first and currently shipping skill collection covers [`@worktif/runtime`](https://runtimeweb.com) — an AWS Lambda serverless framework for TypeScript microservices. It contains **17 skills organized across 5 layers**, each validated against real framework types by CI.
 
 ### The 5-Layer Skill Hierarchy
 
@@ -419,7 +419,7 @@ sequenceDiagram
     participant G as Guardrails
 
     A->>+M: list_skills
-    M-->>-A: 15 skills, layers, status, version range
+    M-->>-A: 17 skills, layers, status, version range
 
     A->>A: Filter status = valid
 
@@ -509,7 +509,7 @@ flowchart TB
   subgraph CONTENT["Skill Content"]
     direction TB
     MF[skills-manifest.json]
-    SK[15 × SKILL.md]
+    SK[17 × SKILL.md]
     RF[references / templates]
     SI[Search Index TF-IDF]
   end
@@ -537,7 +537,7 @@ flowchart TB
 The MCP server is a standalone Node.js executable bundled with esbuild. On startup it:
 
 1. Loads `skills-manifest.json` — the registry of all skills with layer, status, and version range
-2. Pre-loads all 15 SKILL.md files into memory
+2. Pre-loads all 17 SKILL.md files into memory
 3. Builds a TF-IDF search index with boost multipliers (name/description 3×, layerName 2×, body 1×)
 4. Registers five MCP tools and connects to stdio transport
 
@@ -550,7 +550,7 @@ agent-skills/
 ├── mcp-server.ts                     # MCP server entry point (stdio transport)
 ├── index.ts                          # Library entry point (SkillName enum, types)
 ├── types.ts                          # SkillName enum, Skill and SkillManifest interfaces
-├── skills-manifest.json              # Registry: 15 skills, layers, validation status
+├── skills-manifest.json              # Registry: 17 skills, layers, validation status
 ├── lib/
 │   ├── file-resolver.ts              # Disk I/O for skill files and manifest
 │   └── search-index.ts              # TF-IDF search index builder
@@ -638,7 +638,7 @@ yarn build
 # Type-check without emitting
 yarn typecheck
 
-# Validate all 15 skill structures (7-stage pipeline)
+# Validate all 17 skill structures (7-stage pipeline)
 yarn validate
 
 # Run all tests (Jest + fast-check)
@@ -667,7 +667,7 @@ Tests use both example-based (Jest) and property-based (fast-check) approaches:
 | `validators/` | Unit tests for each validation function (name, frontmatter, body, error catalog, terminology) |
 | `skills/` | Skill content verification (cross-references, layer assignments, content structure) |
 | `templates/` | Template compilation against real `@worktif/runtime` types |
-| `checkpoints/` | End-to-end validation of all 15 skills |
+| `checkpoints/` | End-to-end validation of all 17 skills |
 | `ci/` | CI integration tests |
 
 ### Validation Pipeline

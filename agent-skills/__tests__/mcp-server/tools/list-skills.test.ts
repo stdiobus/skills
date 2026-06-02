@@ -12,7 +12,7 @@ import type { SkillManifest } from '../../../types';
 /** A sample manifest with 12 skill entries for testing. */
 const MOCK_MANIFEST: SkillManifest = {
   version: '1.0.0',
-  frameworkVersion: '0.5.0-beta.2',
+  frameworkVersion: '0.5.3-kata.1',
   skills: [
     {
       name: 'runtime-concepts',

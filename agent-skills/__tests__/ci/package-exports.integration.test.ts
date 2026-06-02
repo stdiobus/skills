@@ -123,7 +123,7 @@ describe('Package Exports & Tarball Verification', () => {
       );
       const skills = JSON.parse(result);
       expect(skills).toBeInstanceOf(Array);
-      expect(skills.length).toBe(15);
+      expect(skills.length).toBe(17);
       expect(skills).toContain('runtime-concepts');
       expect(skills).toContain('runtime-patterns-http');
     });
@@ -133,7 +133,7 @@ describe('Package Exports & Tarball Verification', () => {
         `node --input-type=module -e "import { SkillName } from '@stdiobus/skills'; console.log(Object.keys(SkillName).length);"`,
         consumerDir,
       );
-      expect(parseInt(result, 10)).toBe(15);
+      expect(parseInt(result, 10)).toBe(17);
     });
   });
 
@@ -145,7 +145,7 @@ describe('Package Exports & Tarball Verification', () => {
         `node --input-type=module -e "import manifest from '@stdiobus/skills/skills-manifest' with { type: 'json' }; console.log(manifest.skills.length);"`,
         consumerDir,
       );
-      expect(parseInt(result, 10)).toBe(15);
+      expect(parseInt(result, 10)).toBe(17);
     });
 
     it('manifest has correct structure', () => {
@@ -155,8 +155,8 @@ describe('Package Exports & Tarball Verification', () => {
       );
       const data = JSON.parse(result);
       expect(data.v).toBe('1.0.0');
-      expect(data.fv).toBe('0.5.0-beta.2');
-      expect(data.count).toBe(15);
+      expect(data.fv).toBe('0.5.3-kata.1');
+      expect(data.count).toBe(17);
     });
   });
 

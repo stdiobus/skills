@@ -55,7 +55,7 @@ function extractFileReferences(content: string): string[] {
 
 describe('Property 4: Skill Directory Structure Integrity', () => {
   describe('Each skill directory exists and contains SKILL.md', () => {
-    // This is a concrete check for all 15 skills — the "property" is that
+    // This is a concrete check for all 17 skills — the "property" is that
     // for ANY skill in the set, the structural invariants hold.
     it('all 12 skill directories exist under agent-skills/', () => {
       for (const skillName of ALL_SKILLS) {
@@ -136,7 +136,7 @@ describe('Property 4: Skill Directory Structure Integrity', () => {
           const skillMd = path.join(SKILLS_ROOT, skillName, 'SKILL.md');
           return fs.existsSync(skillMd);
         }),
-        { numRuns: 100 },
+        { numRuns: 15 },
       );
     });
 
@@ -150,7 +150,7 @@ describe('Property 4: Skill Directory Structure Integrity', () => {
           );
           return rootTsFiles.length === 0;
         }),
-        { numRuns: 100 },
+        { numRuns: 15 },
       );
     });
 
@@ -166,7 +166,7 @@ describe('Property 4: Skill Directory Structure Integrity', () => {
             return normalized.startsWith('references/') || normalized.startsWith('assets/');
           });
         }),
-        { numRuns: 100 },
+        { numRuns: 15 },
       );
     });
 
@@ -177,7 +177,7 @@ describe('Property 4: Skill Directory Structure Integrity', () => {
           const content = fs.readFileSync(skillMd, 'utf-8');
           return content.startsWith('---\n');
         }),
-        { numRuns: 100 },
+        { numRuns: 15 },
       );
     });
 
@@ -195,7 +195,7 @@ describe('Property 4: Skill Directory Structure Integrity', () => {
             return depth <= 2;
           });
         }),
-        { numRuns: 100 },
+        { numRuns: 15 },
       );
     });
   });

@@ -146,7 +146,7 @@ interface LambdaDefinition<
 | `dynamodb` | `DynamoDbStreamIntegration` | No | DynamoDB Streams trigger config. |
 | `sns` | `SnsIntegration` | No | SNS topic subscription config. |
 | `kinesis` | `KinesisIntegration` | No | Kinesis stream trigger config. |
-| `config` | `LambdaConfig` | No | Per-Lambda overrides: memorySize, timeout, environment. |
+| `config` | `LambdaConfig` | No | Per-Lambda overrides: memorySize, timeout, environment, and acceleration (`kata.enabled`). |
 
 **Generic parameters:**
 - `TTies` (default: `any`) — Instance types for handler access. When `Record<string, any>`, enables object-based ties with full type safety.
@@ -199,6 +199,42 @@ type AnyLambdaDefinition = LambdaDefinition<any, any, any>;
 // Ties class constructor type (for MicroserviceDefinition.ties)
 type TiesInstance<T = unknown> = new (...args: unknown[]) => T;
 ```
+
+### Configuration Types (RuntimeConfig, platforms, acceleration)
+
+`runtime.config.ts` is typed by `RuntimeConfig` (imported from `@worktif/runtime`):
+
+```typescript
+import { RuntimeConfig } from '@worktif/runtime';
+
+interface RuntimeConfig {
+  projectName: string;
+  stages: StageConfig[];               // at least one
+  paths: PathsConfig;
+  infraMode?: 'cdk' | 'auto';          // default 'cdk'
+  features?: FeaturesConfig;
+  awake?: RuntimeAwakeConfig;
+  acceleration?: AccelerationConfig;   // optional; default OFF
+  platforms?: PlatformConfig[];        // optional; multi-platform deployment
+}
+
+interface PlatformConfig {             // name unique, ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+  name: string;
+  awsRegion?: string;
+  features?: FeaturesConfig;
+  awake?: RuntimeAwakeConfig;
+  acceleration?: AccelerationConfig;
+}
+
+interface AccelerationConfig { kata?: KataAccelerationConfig; }  // object: future providers = sibling keys
+interface KataAccelerationConfig {
+  enabled: boolean;                    // default false
+  unlicensedBehavior: 'warn' | 'fail'; // default 'warn'
+}
+```
+
+See [runtime-multiplatform](../runtime-multiplatform/SKILL.md) (Layer 3: Patterns)
+and [runtime-acceleration](../runtime-acceleration/SKILL.md) (Layer 3: Patterns).
 
 ## Instructions
 

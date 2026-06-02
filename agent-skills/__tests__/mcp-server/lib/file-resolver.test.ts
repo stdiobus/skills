@@ -38,8 +38,8 @@ describe('createFileResolver()', () => {
 
       expect(manifest).toBeDefined();
       expect(manifest.version).toBe('1.0.0');
-      expect(manifest.frameworkVersion).toBe('0.5.0-beta.2');
-      expect(manifest.skills).toHaveLength(15);
+      expect(manifest.frameworkVersion).toBe('0.5.3-kata.1');
+      expect(manifest.skills).toHaveLength(17);
       expect(manifest.lastValidated).toBeDefined();
     });
 
@@ -229,7 +229,7 @@ describe('createFileResolver()', () => {
       const customResolver = createFileResolver(PACKAGE_ROOT);
       const manifest = await customResolver.readManifest();
 
-      expect(manifest.skills).toHaveLength(15);
+      expect(manifest.skills).toHaveLength(17);
     });
 
     it('fails gracefully with an invalid package root', async () => {

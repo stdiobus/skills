@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "frameworkVersion": "0.5.0-beta.2",
+  "frameworkVersion": "0.5.3-kata.1",
   "skills": [
     {
       "name": "runtime-concepts",
@@ -59,6 +59,20 @@
       "lastValidated": "2026-05-02T12:00:00.000Z"
     },
     {
+      "name": "runtime-multiplatform",
+      "layer": 3,
+      "versionRange": ">=0.5.0 <1.0.0",
+      "status": "valid",
+      "lastValidated": "2026-06-02T12:00:00.000Z"
+    },
+    {
+      "name": "runtime-acceleration",
+      "layer": 3,
+      "versionRange": ">=0.5.0 <1.0.0",
+      "status": "valid",
+      "lastValidated": "2026-06-02T12:00:00.000Z"
+    },
+    {
       "name": "runtime-constraints-and-guardrails",
       "layer": 4,
       "versionRange": ">=0.5.0 <1.0.0",
@@ -111,5 +125,5 @@
       "lastValidated": "2026-05-11T12:00:00.000Z"
     }
   ],
-  "lastValidated": "2026-05-11T12:00:00.000Z"
+  "lastValidated": "2026-06-02T12:00:00.000Z"
 }

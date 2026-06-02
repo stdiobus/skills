@@ -33,6 +33,8 @@ const ALL_SKILLS = [
   'runtime-patterns-async',
   'runtime-patterns-data-events',
   'runtime-ssr-and-web',
+  'runtime-multiplatform',
+  'runtime-acceleration',
   // Layer 4: Guardrails
   'runtime-constraints-and-guardrails',
   // Layer 5: Diagnostics & Evolution
@@ -50,6 +52,8 @@ const EXPECTED_LAYERS: Record<string, { layer: string; layerName: string }> = {
   'runtime-patterns-async': { layer: '3', layerName: 'Patterns' },
   'runtime-patterns-data-events': { layer: '3', layerName: 'Patterns' },
   'runtime-ssr-and-web': { layer: '3', layerName: 'Patterns' },
+  'runtime-multiplatform': { layer: '3', layerName: 'Patterns' },
+  'runtime-acceleration': { layer: '3', layerName: 'Patterns' },
   'runtime-constraints-and-guardrails': { layer: '4', layerName: 'Guardrails' },
   'runtime-errors-and-diagnostics': { layer: '5', layerName: 'Diagnostics' },
   'runtime-versioning-and-migration': { layer: '5', layerName: 'Diagnostics' },

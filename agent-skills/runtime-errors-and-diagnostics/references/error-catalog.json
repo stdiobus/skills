@@ -288,6 +288,39 @@
             }
           ],
           "decisionRule": "If IAM permission is missing, add it via CDK L2 grant methods. Do NOT use wildcard (*) permissions. Do NOT attach AdministratorAccess."
+        },
+        {
+          "id": "DEPLOY-005",
+          "pattern": "AccelerationPackageNotInstalledError|'@lambdakata/cdk' is not installed",
+          "meaning": "Acceleration is enabled for a Lambda with unlicensedBehavior 'fail', but the optional peer dependency @lambdakata/cdk is not installed, so synth aborts.",
+          "causes": [
+            "acceleration.kata.enabled is true with unlicensedBehavior: 'fail' but @lambdakata/cdk is not installed",
+            "The optional peer dependency was never added to the consumer project",
+            "A monorepo hoisting issue makes @lambdakata/cdk unresolvable at synth"
+          ],
+          "resolution": [
+            {
+              "step": 1,
+              "action": "Install the optional Lambda Kata provider package",
+              "code": "npm i @lambdakata/cdk"
+            },
+            {
+              "step": 2,
+              "action": "Or relax the behavior so missing/unlicensed Lambdas are skipped instead of aborting",
+              "code": "acceleration: { kata: { enabled: true, unlicensedBehavior: 'warn' } }"
+            },
+            {
+              "step": 3,
+              "action": "Or disable acceleration entirely if it is not needed",
+              "code": "acceleration: { kata: { enabled: false } }"
+            },
+            {
+              "step": 4,
+              "action": "Re-run synth/deploy after the change",
+              "code": "yarn deploy:dev"
+            }
+          ],
+          "decisionRule": "If acceleration aborts on a missing package, install @lambdakata/cdk or use unlicensedBehavior 'warn'. Do NOT bundle/vendor the package and do NOT remove the lazy require isolation in the adapter."
         }
       ]
     },

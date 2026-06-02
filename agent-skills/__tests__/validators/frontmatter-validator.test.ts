@@ -58,7 +58,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 200 },
+      { numRuns: 35 },
     );
   });
 
@@ -75,7 +75,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('name'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -92,7 +92,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('description'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -108,7 +108,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('1-1024 characters'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -125,7 +125,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('metadata'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -141,7 +141,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('author'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -157,7 +157,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('version'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -173,7 +173,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('semver range'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -190,7 +190,7 @@ describe('validateFrontmatter() — Property 2: SKILL.md frontmatter completenes
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });

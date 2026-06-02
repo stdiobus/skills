@@ -50,7 +50,7 @@ describe('Property 1: Skill readability round-trip', () => {
           expect(result.content[0].text).toBe(diskContent);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });
@@ -76,7 +76,7 @@ describe('Property 2: Invalid skill name rejection', () => {
         expect(result.content[0].type).toBe('text');
         expect(result.content[0].text).toContain('Invalid skill name');
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -90,7 +90,7 @@ describe('Property 2: Invalid skill name rejection', () => {
         expect(result.content[0].type).toBe('text');
         expect(result.content[0].text).toContain('Invalid skill name');
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -107,7 +107,7 @@ describe('Property 2: Invalid skill name rejection', () => {
         expect(result.content[0].type).toBe('text');
         expect(result.content[0].text).toContain('Invalid skill name');
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });

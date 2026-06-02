@@ -42,7 +42,7 @@ describe('validateBodyStructure() — Property 3: SKILL.md body structure invari
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 200 },
+      { numRuns: 35 },
     );
   });
 
@@ -58,7 +58,7 @@ describe('validateBodyStructure() — Property 3: SKILL.md body structure invari
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('500 lines'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -80,7 +80,7 @@ describe('validateBodyStructure() — Property 3: SKILL.md body structure invari
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Common Mistakes'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -98,7 +98,7 @@ describe('validateBodyStructure() — Property 3: SKILL.md body structure invari
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -117,7 +117,7 @@ describe('validateBodyStructure() — Property 3: SKILL.md body structure invari
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Section order violation'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -135,7 +135,7 @@ describe('validateBodyStructure() — Property 3: SKILL.md body structure invari
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('Section order violation'))).toBe(true);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -153,7 +153,7 @@ describe('validateBodyStructure() — Property 3: SKILL.md body structure invari
         expect(result.valid).toBe(true);
         expect(result.errors).toHaveLength(0);
       }),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });

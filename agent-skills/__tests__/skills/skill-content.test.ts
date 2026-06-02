@@ -1,7 +1,7 @@
 // =============================================================================
 // Example-Based Test: Skill Content Verification
 // Feature: runtime-web-agent-skills
-// Purpose: Verifies each of the 15 skills has a SKILL.md that parses correctly,
+// Purpose: Verifies each of the 17 skills has a SKILL.md that parses correctly,
 //          pattern skills contain required canonical templates, and error catalog
 //          contains entries for all 4 categories.
 // Validates: Requirements 13.1, 14.1, 10.1
@@ -22,6 +22,8 @@ const ALL_SKILLS = [
   'runtime-patterns-async',
   'runtime-patterns-data-events',
   'runtime-ssr-and-web',
+  'runtime-multiplatform',
+  'runtime-acceleration',
   'runtime-constraints-and-guardrails',
   'runtime-errors-and-diagnostics',
   'runtime-versioning-and-migration',
@@ -107,7 +109,7 @@ function parseFrontmatter(content: string): Partial<SkillFrontmatter> {
 }
 
 describe('Skill Content Verification', () => {
-  describe('All 15 skills have a SKILL.md that parses correctly', () => {
+  describe('All 17 skills have a SKILL.md that parses correctly', () => {
     for (const skillName of ALL_SKILLS) {
       describe(`${skillName}`, () => {
         const skillPath = path.join(SKILLS_ROOT, skillName, 'SKILL.md');

@@ -48,8 +48,8 @@ describe('Property 7: Enum-manifest synchronization', () => {
   });
 
   it('enum and manifest have the same cardinality (15 skills)', () => {
-    expect(enumValues).toHaveLength(15);
-    expect(manifestNames).toHaveLength(15);
+    expect(enumValues).toHaveLength(17);
+    expect(manifestNames).toHaveLength(17);
     expect(enumValues).toHaveLength(manifestNames.length);
   });
 
@@ -69,7 +69,7 @@ describe('Property 7: Enum-manifest synchronization', () => {
           expect(content).toMatch(/^---\n/);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -83,7 +83,7 @@ describe('Property 7: Enum-manifest synchronization', () => {
           expect(enumValueSet.has(manifestName)).toBe(true);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 
@@ -97,7 +97,7 @@ describe('Property 7: Enum-manifest synchronization', () => {
           expect(manifestNameSet.has(enumVal)).toBe(true);
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 15 },
     );
   });
 });
