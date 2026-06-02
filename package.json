@@ -45,7 +45,8 @@
     "build:pack": "npm run build && npm pack --pack-destination out/",
     "ci": "npm run typecheck && npm run validate && npm run test:ci",
     "verify:package": "tsx agent-skills/scripts/verify-package/verify-package.ts",
-    "prepublishOnly": "npm run clean && npm run build && npm run test"
+    "prepublishOnly": "npm run clean && npm run build && npm run test",
+    "npm:publish": "yarn run build && npm publish --access public"
   },
   "bin": {
     "mcp-skills": "out/dist/mcp-server.mjs"
