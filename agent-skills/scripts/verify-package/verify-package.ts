@@ -256,6 +256,7 @@ async function main(): Promise<void> {
       'runtime-api-core', 'runtime-api-integrations',
       'runtime-patterns-http', 'runtime-patterns-async',
       'runtime-patterns-data-events', 'runtime-ssr-and-web',
+      'runtime-multiplatform', 'runtime-acceleration',
       'runtime-constraints-and-guardrails',
       'runtime-errors-and-diagnostics', 'runtime-versioning-and-migration',
       'runtime-validation-and-ci',
