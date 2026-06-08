@@ -76,6 +76,12 @@ import type {
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..', '..');
 const AGENT_SKILLS_DIR = path.join(PACKAGE_ROOT, 'agent-skills');
 const ADAPTER_SOURCE_PATH = path.join(AGENT_SKILLS_DIR, 'mcp-server.ts');
+// The delegate-only 5-tool wiring (open-world schema + `runtime.<op>(...)` delegation) was
+// extracted into the shared builder `lib/build-server.ts`, which BOTH the production
+// executable and the e2e federation harness construct the server through. Structural
+// assertions about tool wiring therefore target the builder; the production composition
+// (registry -> `createRuntimeFromRegistry`) is still asserted on `mcp-server.ts`.
+const BUILDER_SOURCE_PATH = path.join(AGENT_SKILLS_DIR, 'lib', 'build-server.ts');
 const MCP_SERVER_PATH = path.join(PACKAGE_ROOT, 'out', 'dist', 'mcp-server.mjs');
 
 /** A name that is NOT in the published `SkillName` set / manifest. */
@@ -92,32 +98,42 @@ const PUBLISHED_SKILL = 'runtime-concepts';
 // =============================================================================
 
 describe('adapter is delegate-only (structural — Req 9.4)', () => {
-  const rawSource = fs.readFileSync(ADAPTER_SOURCE_PATH, 'utf-8');
-  // Strip comments before inspecting LIVE code: the adapter's doc comment
-  // legitimately documents the old `z.enum(VALID_SKILLS)` pattern it replaced,
-  // which must not count as a surviving gate.
-  const source = rawSource
-    .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
-    .replace(/\/\/.*$/gm, ''); // line comments
+  // Strip comments before inspecting LIVE code: doc comments legitimately document the
+  // old `z.enum(VALID_SKILLS)` pattern that was replaced, which must not count as a
+  // surviving gate.
+  const stripComments = (s: string): string =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-  it('uses the open-world skill schema z.string().min(1)', () => {
-    expect(source).toMatch(/z\.string\(\)\.min\(1\)/);
+  // The 5-tool wiring lives in the shared builder; production composition lives in the adapter.
+  const builderSource = stripComments(fs.readFileSync(BUILDER_SOURCE_PATH, 'utf-8'));
+  const adapterSource = stripComments(fs.readFileSync(ADAPTER_SOURCE_PATH, 'utf-8'));
+
+  it('uses the open-world skill schema z.string().min(1) (shared builder)', () => {
+    expect(builderSource).toMatch(/z\.string\(\)\.min\(1\)/);
   });
 
-  it('has no closed-world enum gate or VALID_SKILLS allow-list (live code)', () => {
-    // The pre-migration gate was `z.enum(VALID_SKILLS)`; neither the enum gate
-    // nor a name allow-list may survive as executable code in a delegate-only adapter.
-    expect(source).not.toMatch(/z\.enum\s*\(/);
-    expect(source).not.toContain('VALID_SKILLS');
+  it('has no closed-world enum gate or VALID_SKILLS allow-list in builder or adapter (live code)', () => {
+    // The pre-migration gate was `z.enum(VALID_SKILLS)`; neither the enum gate nor a name
+    // allow-list may survive as executable code in either the builder or the adapter.
+    for (const src of [builderSource, adapterSource]) {
+      expect(src).not.toMatch(/z\.enum\s*\(/);
+      expect(src).not.toContain('VALID_SKILLS');
+    }
   });
 
-  it('delegates each skill-addressing tool to the SkillsRuntime', () => {
-    // The handlers translate to a SkillRef and call the runtime — they do not
+  it('the shared builder delegates each skill-addressing tool to the SkillsRuntime', () => {
+    // The builder's handlers translate to a SkillRef and call the runtime — they do not
     // resolve names themselves.
-    expect(source).toMatch(/runtime\.read\s*\(/);
-    expect(source).toMatch(/runtime\.getReferences\s*\(/);
-    expect(source).toMatch(/runtime\.readReference\s*\(/);
-    expect(source).toMatch(/createRuntimeFromRegistry\s*\(/);
+    expect(builderSource).toMatch(/runtime\.read\s*\(/);
+    expect(builderSource).toMatch(/runtime\.getReferences\s*\(/);
+    expect(builderSource).toMatch(/runtime\.readReference\s*\(/);
+  });
+
+  it('the adapter composes the runtime via createRuntimeFromRegistry (production composition)', () => {
+    // Production composition (registry -> transport-selected runtime) stays in the adapter.
+    expect(adapterSource).toMatch(/createRuntimeFromRegistry\s*\(/);
+    // And the adapter delegates to the shared builder rather than re-registering tools.
+    expect(adapterSource).toMatch(/buildSkillsMcpServer\s*\(/);
   });
 });
 

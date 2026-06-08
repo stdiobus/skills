@@ -80,53 +80,18 @@
  * `list_references`, and `read_reference`.
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
 import { createFileResolver } from './lib/file-resolver.js';
 import {
-  COMPAT_RENDER_OPTIONS,
   EXPOSE_PROVENANCE_ENV,
   PROVENANCE_SHAPE_VERSION,
-  renderListReferences,
-  renderReadReference,
-  renderReadSkill,
   resolveExposeProvenance,
   type AdapterRenderOptions,
-  type ToolResult,
 } from './lib/tool-render.js';
-import { presentManifest } from './lib/manifest-presenter.js';
-import { presentSearch } from './lib/search-presenter.js';
+import { buildSkillsMcpServer } from './lib/build-server.js';
 import { FilesystemSkillProvider } from './runtime/providers/filesystem-provider.js';
 import { SkillProviderRegistry, createRuntimeFromRegistry } from './runtime/registry.js';
 import { bundledTrustPolicy } from './runtime/trust.js';
-
-/**
- * Open-world skill-name schema (Req 1.6, 9.1, 9.6).
- *
- * Replaces the pre-migration `z.enum(VALID_SKILLS)` gate. Any non-empty string is valid
- * input; resolution and the open-world / `not_found` decision move into the runtime. The
- * tool's input parameter key set is unchanged — only the validator is relaxed.
- */
-const skillParam = z.string().min(1);
-
-/**
- * Emit the Req 9.6 non-fatal open-world warning (diagnostics channel only).
- *
- * Membership in the published set decides ONLY whether to warn — it is never a
- * resolution gate. The caller still delegates to the runtime regardless, and an
- * unresolved name still surfaces as a typed `not_found` (Req 9.6, 1.6).
- *
- * The warning is written to STDERR, never STDOUT: STDOUT is the JSON-RPC / NDJSON
- * protocol channel and must stay protocol-only. Published names emit no warning.
- */
-function warnIfUnpublished(tool: string, name: string, published: ReadonlySet<string>): void {
-  if (!published.has(name)) {
-    process.stderr.write(
-      `${tool}: warning — open-world skill name "${name}" is not in the published set\n`,
-    );
-  }
-}
 
 async function main(): Promise<void> {
   // Bundled provider + registry → transport-selected runtime (default in-process).
@@ -173,106 +138,16 @@ async function main(): Promise<void> {
     );
   }
 
-  const server = new McpServer(
-    { name: '@stdiobus/skills', version: manifest.version },
-    { capabilities: { tools: {} } },
-  );
-
-  // --- Tool registrations ---
-
-  // list_skills: delegate to the runtime; render the AUTHORITATIVE descriptor list back
-  // into the published manifest registry document (byte-for-byte for the bundled set).
-  server.registerTool(
-    'list_skills',
-    {
-      description: 'List all available skills with their layers and metadata',
-      inputSchema: {},
-    },
-    async (): Promise<ToolResult> => presentManifest(await runtime.list(), manifest),
-  );
-
-  // read_skill: delegate to the runtime; render SkillContent.body raw.
-  server.registerTool(
-    'read_skill',
-    {
-      description: 'Read the full SKILL.md content for a specific skill',
-      inputSchema: { skill: skillParam },
-    },
-    async (args): Promise<ToolResult> => {
-      warnIfUnpublished('read_skill', args.skill, publishedSkills);
-      const resp = await runtime.read({ ref: { kind: 'name', name: args.skill } });
-      return renderReadSkill(resp, renderOpts);
-    },
-  );
-
-  // list_references: delegate to the runtime; render JSON array of reference paths.
-  server.registerTool(
-    'list_references',
-    {
-      description: 'List reference files available for a specific skill',
-      inputSchema: { skill: skillParam },
-    },
-    async (args): Promise<ToolResult> => {
-      warnIfUnpublished('list_references', args.skill, publishedSkills);
-      const resp = await runtime.getReferences({ ref: { kind: 'name', name: args.skill } });
-      return renderListReferences(resp, renderOpts);
-    },
-  );
-
-  // read_reference: preserve the directory-traversal guard, then delegate; render body raw.
-  server.registerTool(
-    'read_reference',
-    {
-      description: 'Read a specific reference file for a skill',
-      inputSchema: {
-        skill: skillParam,
-        reference: z.string().min(1),
-      },
-    },
-    async (args): Promise<ToolResult> => {
-      warnIfUnpublished('read_reference', args.skill, publishedSkills);
-      // Security guard (read-only, no name-resolution): reject traversal before delegating,
-      // preserving the existing observable error text byte-for-byte.
-      if (args.reference.includes('..')) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'read_reference: Invalid reference path — directory traversal ("..") is not allowed.',
-            },
-          ],
-          isError: true,
-        };
-      }
-      const resp = await runtime.readReference({
-        ref: { kind: 'name', name: args.skill },
-        reference: args.reference,
-      });
-      return renderReadReference(resp, renderOpts);
-    },
-  );
-
-  // search_skills: delegate to the runtime; render the ranked results back into the
-  // published result shape. Ranking comes from the bundled provider's native keyword index
-  // (enabled above), so `runtime.search()` preserves the published ordering (Req 9.4).
-  server.registerTool(
-    'search_skills',
-    {
-      description: 'Search skills by keyword or topic',
-      inputSchema: { query: z.string().min(1) },
-    },
-    async (args): Promise<ToolResult> => {
-      // Input validation (NOT name resolution): preserve the pre-migration non-empty-query
-      // contract — a whitespace-only query is a tool error, not a delegated search.
-      if (args.query.trim().length === 0) {
-        return {
-          content: [{ type: 'text', text: 'search_skills: Query must be a non-empty string.' }],
-          isError: true,
-        };
-      }
-      return presentSearch(await runtime.search({ query: args.query }));
-    },
-  );
+  // Build the 5-tool server through the SHARED builder so production and the e2e
+  // federation harness exercise the SAME real wiring (no parallel re-implementation).
+  const server = buildSkillsMcpServer({
+    name: '@stdiobus/skills',
+    version: manifest.version,
+    runtime,
+    manifest,
+    publishedSkills,
+    renderOpts,
+  });
 
   // --- Connect transport ---
 
