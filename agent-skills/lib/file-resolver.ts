@@ -17,6 +17,18 @@ export interface FileResolver {
   /** Absolute path to the package root directory. */
   readonly packageRoot: string;
 
+  /**
+   * Absolute path to a skill's references root directory
+   * (`{packageRoot}/agent-skills/{skillName}/references`).
+   *
+   * This is the SINGLE place that encodes the on-disk references layout. Both
+   * {@link listReferences} and {@link readReference} resolve against it, and the bundled
+   * {@link SkillProvider} exposes it through its resource-scope contract so the runtime can
+   * enforce containment against the *actual* references root rather than the coarse package
+   * root. Pure path computation — performs no I/O and does not check existence.
+   */
+  referencesRoot(skillName: string): string;
+
   /** Read and parse the skills-manifest.json file. */
   readManifest(): Promise<SkillManifest>;
 
@@ -78,6 +90,10 @@ export function createFileResolver(packageRootOverride?: string): FileResolver {
       return packageRoot;
     },
 
+    referencesRoot(skillName: string): string {
+      return path.join(packageRoot, 'agent-skills', skillName, 'references');
+    },
+
     async readManifest(): Promise<SkillManifest> {
       // @toto: include merging by custom manifest
       const manifestPath = path.join(packageRoot, 'agent-skills', 'skills-manifest.json');
@@ -101,7 +117,7 @@ export function createFileResolver(packageRootOverride?: string): FileResolver {
     },
 
     async listReferences(skillName: string): Promise<string[]> {
-      const refsDir = path.join(packageRoot, 'agent-skills', skillName, 'references');
+      const refsDir = this.referencesRoot(skillName);
       const files = await listFilesRecursive(refsDir, refsDir);
       return files
         .filter((f) => path.basename(f) !== '.gitkeep')
@@ -116,7 +132,7 @@ export function createFileResolver(packageRootOverride?: string): FileResolver {
         );
       }
 
-      const refsDir = path.join(packageRoot, 'agent-skills', skillName, 'references');
+      const refsDir = this.referencesRoot(skillName);
       const resolvedPath = path.resolve(refsDir, referencePath);
 
       // Belt-and-suspenders: verify the resolved path stays within references/

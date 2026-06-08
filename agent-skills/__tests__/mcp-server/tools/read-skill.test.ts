@@ -23,6 +23,7 @@ Overview of the runtime framework.
 function createMockResolver(overrides: Partial<FileResolver> = {}): FileResolver {
   return {
     packageRoot: '/mock/root',
+    referencesRoot: jest.fn((s: string) => `/mock/root/agent-skills/${s}/references`),
     readManifest: jest.fn(),
     readSkill: jest.fn().mockResolvedValue(MOCK_SKILL_CONTENT),
     listReferences: jest.fn(),

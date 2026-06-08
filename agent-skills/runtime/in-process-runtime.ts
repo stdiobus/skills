@@ -26,11 +26,9 @@ import type {
   SkillRuntimeError,
   SkillsRuntime,
 } from './contract.js';
-import {
-  type AggregateDiagnostics,
-  attachAggregateDiagnostics,
-  readAggregateDiagnostics,
-} from './federation.js';
+import { type AggregateDiagnostics, attachAggregateDiagnostics } from './federation.js';
+import { guardDescriptorIdentity } from './fqid.js';
+import { finalizeProvenance } from './provenance.js';
 import { checkContentSize, checkIsolation, checkWithinRoot } from './security/boundary.js';
 import type { TrustPolicy } from './trust.js';
 
@@ -74,16 +72,37 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   // --- security boundary (Task 9.2; design §9; Req 11.4, 11.5) ----------
 
   /**
-   * Path-traversal boundary (Req 11.4). Returns an `out_of_bounds` error response when the
-   * provider has a `permittedRoot` and `candidatePath` escapes it; the caller MUST return
-   * this WITHOUT reading the location. Returns `null` when there is nothing to enforce
-   * (no trust lookup, or no `permittedRoot` — in which case the provider's own resolver
-   * guard remains the backstop, as documented on {@link TrustPolicy.permittedRoot}).
+   * Path-traversal boundary (Req 11.4; Milestone-002 provider resource-scope contract).
+   *
+   * Returns an `out_of_bounds` error response when `candidatePath` escapes the resolved
+   * skill's effective resource root; the caller MUST return this WITHOUT reading the
+   * location. The root is sourced in this order, so the runtime NEVER invents filesystem
+   * containment of its own:
+   *
+   *   1. the PROVIDER's declared resource root for this resolved skill / reference
+   *      ({@link SkillProvider.resourceRoot}) — the correctly-scoped root (e.g. the bundled
+   *      provider's `{packageRoot}/agent-skills/{skill}/references` directory). Enforcing
+   *      against THIS makes the guard a TRUE generalization of the provider's own
+   *      containment: it catches a cross-skill reference (an absolute path into a SIBLING
+   *      skill), not merely a `..` segment;
+   *   2. else the registration's coarse trust `permittedRoot` (a backstop for a provider
+   *      that declares no resource root but still has a coarse permitted root);
+   *   3. else `null` — the provider opted out of a filesystem resource root (remote/DB), so
+   *      the runtime applies no path guard and relies on the provider's OWN containment.
+   *
+   * Enforcement is active only when a trust lookup is wired (preserving the proven baseline:
+   * direct construction → no enforcement). When wired but neither a provider resource root
+   * nor a `permittedRoot` is available, behavior matches the prior baseline (no guard).
    */
-  private enforceWithinRoot(providerId: string, candidatePath: string): SkillResponse<never> | null {
-    const policy = this.trustOf?.(providerId);
-    if (!policy?.permittedRoot) return null;
-    const res = checkWithinRoot(policy.permittedRoot, candidatePath, providerId);
+  private enforceWithinRoot(
+    provider: SkillProvider,
+    resolved: ResolvedSkill,
+    candidatePath: string,
+  ): SkillResponse<never> | null {
+    if (!this.trustOf) return null;
+    const root = provider.resourceRoot?.(resolved, candidatePath) ?? this.trustOf(provider.id)?.permittedRoot;
+    if (root === undefined) return null;
+    const res = checkWithinRoot(root, candidatePath, provider.id);
     return res.ok ? null : { ok: false, error: res.error };
   }
 
@@ -96,6 +115,42 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
     const policy = this.trustOf?.(providerId);
     if (!policy) return null;
     const res = checkContentSize(content, policy.maxContentBytes, providerId);
+    return res.ok ? null : { ok: false, error: res.error };
+  }
+
+  /**
+   * PRE-READ content-size boundary (Req 11.5, "shall not load in full"; design §9).
+   *
+   * Closes the latent gap where {@link enforceContentSize} only runs AFTER the provider has
+   * already materialized the full body. When the provider has a trust policy AND implements
+   * the OPTIONAL {@link SkillProvider.readMetadata} probe, the runtime asks for the declared
+   * byte size AT SOURCE and rejects oversize content via the byte-count
+   * {@link checkContentSize} overload BEFORE `read`/`readReference` is ever called — so an
+   * untrusted (e.g. remote/bus) provider cannot transmit a 200MB body before the check.
+   *
+   * Returns:
+   * - an error response when the probe declares an oversize → the caller MUST return it and
+   *   MUST NOT materialize the body;
+   * - `null` when there is nothing to enforce here (no trust lookup → proven baseline; no
+   *   `readMetadata` probe; or the probe declines to declare a size) — the caller proceeds
+   *   and the post-read {@link enforceContentSize} backstop still applies.
+   *
+   * `reference` selects which body to size: omitted → the skill body ({@link read});
+   * supplied → that reference body ({@link readReference}). The probe is awaited inside the
+   * caller's existing try/catch, so a throwing probe surfaces as a returned `provider_error`
+   * (never thrown across the boundary), consistent with every other provider call.
+   */
+  private async enforceContentSizePreRead(
+    provider: SkillProvider,
+    resolved: ResolvedSkill,
+    reference?: string,
+  ): Promise<SkillResponse<never> | null> {
+    const policy = this.trustOf?.(provider.id);
+    if (!policy) return null;
+    if (!provider.readMetadata) return null;
+    const meta = await provider.readMetadata(resolved, reference);
+    if (typeof meta.sizeBytes !== 'number') return null;
+    const res = checkContentSize(meta.sizeBytes, policy.maxContentBytes, provider.id);
     return res.ok ? null : { ok: false, error: res.error };
   }
 
@@ -136,31 +191,83 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
    * here and recorded as a returned error rather than aborting the fan-out — one
    * throwing provider must never abort resolution or propagate across the boundary
    * (Req 2.6). Providers that resolve successfully still contribute their candidates.
+   *
+   * DETERMINISTIC ATTRIBUTION (Req 2.5, 4.8): `failures` is ordered by PROVIDER
+   * PRECEDENCE (the `providers` array order), NOT by resolve() completion timing.
+   * `Promise.all` preserves result order positionally regardless of which promise
+   * settles first, so collecting failures while iterating `outcomes` in order makes
+   * attribution independent of a slow-vs-fast resolve() race. This mirrors the
+   * order-stable per-source collection `list`/`search` already perform, and is the
+   * internal `ResolutionDiagnostics` the runtime attributes from — not a public type.
    */
   private async resolveAll(
     ref: SkillRef,
-  ): Promise<{ candidates: ResolvedSkill[]; errors: Array<{ provider: string; message: string }> }> {
-    const errors: Array<{ provider: string; message: string }> = [];
-    const perProvider = await Promise.all(
-      this.providers.map(async (p) => {
-        try {
-          return await p.resolve(ref);
-        } catch (e) {
-          errors.push({ provider: p.id, message: String(e) });
-          return [] as ResolvedSkill[];
-        }
-      }),
+  ): Promise<{ candidates: ResolvedSkill[]; failures: Array<{ provider: string; error: SkillRuntimeError }> }> {
+    const outcomes = await Promise.all(
+      this.providers.map(
+        async (
+          p,
+        ): Promise<
+          | { ok: true; resolved: ResolvedSkill[] }
+          | { ok: false; failure: { provider: string; error: SkillRuntimeError } }
+        > => {
+          try {
+            return { ok: true, resolved: await p.resolve(ref) };
+          } catch (e) {
+            const error: SkillRuntimeError = { code: 'provider_error', provider: p.id, message: String(e) };
+            return { ok: false, failure: { provider: p.id, error } };
+          }
+        },
+      ),
     );
-    return { candidates: perProvider.flat(), errors };
+
+    const candidates: ResolvedSkill[] = [];
+    const failures: Array<{ provider: string; error: SkillRuntimeError }> = [];
+    for (const outcome of outcomes) {
+      if (outcome.ok) {
+        candidates.push(...outcome.resolved);
+        continue;
+      }
+      failures.push(outcome.failure);
+    }
+    return { candidates, failures };
   }
 
-  /** Distinct candidates keyed by fqid (federation dedupe by stable identity). */
-  private dedupeByFqid(candidates: ResolvedSkill[]): ResolvedSkill[] {
-    const seen = new Map<string, ResolvedSkill>();
+  /**
+   * Content-distinct candidate descriptors, in first-seen (provider-precedence) order.
+   *
+   * Collapses GENUINE duplicates (descriptors that are byte-for-byte equal by
+   * {@link descriptorSignature}) to a single entry, while preserving every descriptor that
+   * differs in any field — including two descriptors that COLLIDE on one FQID but differ in
+   * content. This is exactly the candidate set surfaced on an `ambiguous` result so the
+   * caller sees every clashing descriptor and the runtime never silently drops one
+   * (Req 1.4, 2.7, 5.6).
+   */
+  private distinctDescriptors(candidates: readonly ResolvedSkill[]): SkillDescriptor[] {
+    const bySignature = new Map<string, SkillDescriptor>();
     for (const c of candidates) {
-      if (!seen.has(c.descriptor.fqid)) seen.set(c.descriptor.fqid, c);
+      const signature = this.descriptorSignature(c.descriptor);
+      if (!bySignature.has(signature)) bySignature.set(signature, c.descriptor);
     }
-    return [...seen.values()];
+    return [...bySignature.values()];
+  }
+
+  /**
+   * Descriptor identity guard at provider ingress (Req 5.7, 1.5; design §5).
+   *
+   * Runs {@link guardDescriptorIdentity} over a batch of provider-produced descriptors and
+   * returns the FIRST inadmissible descriptor's `bad_request` error, or `null` when every
+   * descriptor carries a valid, consistent identity. Funnelling every resolution / list /
+   * search ingress through this one method guarantees no partial, empty, oversized, or
+   * inconsistent descriptor is admitted — or used as an FQID dedupe key — without being
+   * rejected as a returned error (never thrown). NARROW: identity only, not content.
+   */
+  private guardDescriptors(descriptors: readonly SkillDescriptor[]): SkillRuntimeError | null {
+    for (const descriptor of descriptors) {
+      const error = guardDescriptorIdentity(descriptor);
+      if (error) return error;
+    }
+    return null;
   }
 
   /**
@@ -230,49 +337,85 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   }
 
   private finalizeProvenance(resolved: ResolvedSkill, askedRef: SkillRef): Provenance {
-    return {
-      ...resolved.provenanceSeed,
-      fqid: resolved.descriptor.fqid,
-      provider: resolved.providerId,
-      source: resolved.provenanceSeed.source,
-      resolvedFrom: askedRef,
-    };
+    return finalizeProvenance(resolved, askedRef);
   }
 
   /**
    * Resolve a ref to exactly one candidate or a typed error.
-   * Ambiguity (more than one distinct fqid) is NEVER resolved by silent first-match.
+   *
+   * Single-skill resolution routes through the SAME conflict-aware {@link dedupeWithConflicts}
+   * that `list`/`search` use, so identity collisions are handled identically everywhere
+   * (Task 31 — supersedes T13). Ambiguity is NEVER resolved by a silent first-match:
+   *
+   * - two DISTINCT descriptors that COLLIDE on one FQID (same `fqid`, differing content) are
+   *   surfaced as a `conflicts` entry by the dedupe and yield `ambiguous` (Req 5.6) — the
+   *   prior `dedupeByFqid` silently kept the first such descriptor, which this fix removes;
+   * - two or more candidates with DIFFERING FQIDs likewise yield `ambiguous` (Req 1.4, 2.7);
+   * - GENUINE duplicates (same FQID AND identical descriptor content) collapse to one and
+   *   resolve cleanly — a single bundled provider never collides, so its resolution is
+   *   unchanged (Req 5.5).
+   *
+   * The `ambiguous` candidate list is the set of CONTENT-DISTINCT descriptors
+   * ({@link distinctDescriptors}), so every clashing descriptor — whether it differs by
+   * FQID or by same-FQID content — is reported and none is dropped. A pluggable
+   * `IdentityConflictPolicy` is a future refinement (provider-boundary draft T27); this
+   * fix reuses the existing mechanism rather than introducing a new policy type.
    */
   private async resolveOne(
     ref: SkillRef,
   ): Promise<{ ok: true; resolved: ResolvedSkill } | { ok: false; error: SkillResponse<never> }> {
-    const { candidates, errors } = await this.resolveAll(ref);
-    const distinct = this.dedupeByFqid(candidates);
-    if (distinct.length === 0) {
-      // A throwing provider with no successful candidate is attributed as a
-      // returned provider_error rather than masquerading as not_found.
-      if (errors.length > 0) {
-        const first = errors[0];
-        return {
-          ok: false,
-          error: {
-            ok: false,
-            error: { code: 'provider_error', provider: first.provider, message: first.message },
-          },
-        };
+    const { candidates, failures } = await this.resolveAll(ref);
+    // Descriptor identity guard (Req 5.7, 1.5): a provider-produced descriptor must carry a
+    // valid, CONSISTENT identity BEFORE it enters FQID-keyed dedupe/resolution. An invalid
+    // (partial/empty/oversized/inconsistent) descriptor is rejected as a returned
+    // `bad_request` — never admitted, never used as a dedupe key, never thrown.
+    const guardError = this.guardDescriptors(candidates.map((c) => c.descriptor));
+    if (guardError) return { ok: false, error: { ok: false, error: guardError } };
+
+    // Conflict-aware dedupe (the EXISTING helper used by list/search): `deduped` keeps one
+    // entry per FQID in provider-precedence order; `conflicts` names every FQID under which
+    // two descriptors differ in content. Routing resolveOne through this is the structural
+    // fix for Req 5.6 (no silent first-match on a same-FQID collision).
+    const { deduped, conflicts } = this.dedupeWithConflicts(
+      candidates,
+      (c) => c.descriptor.fqid,
+      (c) => c.descriptor,
+    );
+
+    if (deduped.length === 0) {
+      // No candidate resolved — attribute the outcome DETERMINISTICALLY from the
+      // precedence-ordered `failures` (Req 2.5, 4.8), independent of resolve()
+      // completion timing:
+      //   • exactly one contributing provider threw → that provider's `provider_error`
+      //     (single-provider behavior is byte-for-byte unchanged from the baseline);
+      //   • two or more threw → `aggregate_error` preserving EACH failure's code in
+      //     provider-precedence order, so no contributing failure is silently lost;
+      //   • every contributing provider cleanly returned zero candidates (no throws)
+      //     → `not_found`.
+      if (failures.length === 1) {
+        return { ok: false, error: { ok: false, error: failures[0]!.error } };
+      }
+      if (failures.length > 1) {
+        return { ok: false, error: { ok: false, error: { code: 'aggregate_error', failures } } };
       }
       return { ok: false, error: { ok: false, error: { code: 'not_found', ref } } };
     }
-    if (distinct.length > 1) {
+
+    // Ambiguous when EITHER multiple distinct FQIDs survive (Req 1.4, 2.7) OR a same-FQID
+    // content conflict was surfaced (Req 5.6). In both cases report every content-distinct
+    // candidate descriptor and select NONE.
+    if (deduped.length > 1 || conflicts.length > 0) {
       return {
         ok: false,
         error: {
           ok: false,
-          error: { code: 'ambiguous', ref, candidates: distinct.map((c) => c.descriptor) },
+          error: { code: 'ambiguous', ref, candidates: this.distinctDescriptors(candidates) },
         },
       };
     }
-    return { ok: true, resolved: distinct[0] };
+
+    // Exactly one FQID with no content conflict: genuine duplicates collapsed to one.
+    return { ok: true, resolved: deduped[0] };
   }
 
   private providerById(id: string): SkillProvider | undefined {
@@ -290,6 +433,11 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
       return { ok: false, error: { code: 'unsupported', capability: 'read', provider: r.resolved.providerId } };
     }
     try {
+      // Pre-read content-size boundary (Req 11.5, "shall not load in full"): when the
+      // provider declares an oversize via the optional readMetadata probe, reject BEFORE
+      // materializing the body. Absent probe → fall through to the post-read backstop.
+      const preGuard = await this.enforceContentSizePreRead(provider, r.resolved);
+      if (preGuard) return preGuard;
       const data = await provider.read(r.resolved);
       // Content-size boundary (Req 11.5): reject oversize content as a RETURNED error.
       const sizeGuard = this.enforceContentSize(r.resolved.providerId, data.body);
@@ -333,7 +481,14 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
     const outcomes = await Promise.all(
       supporting.map(async (p) => {
         try {
-          return { provider: p.id, resolved: await p.list!(input) };
+          const resolved = await p.list!(input);
+          // Descriptor identity guard (Req 5.7, 1.5): a provider that emits a
+          // partial/empty/oversized/inconsistent descriptor is recorded as a `bad_request`
+          // source — its items are NOT admitted — preserving partial-failure resilience for
+          // the remaining well-formed providers (never thrown across the boundary).
+          const guardError = this.guardDescriptors(resolved.map((r) => r.descriptor));
+          if (guardError) return { provider: p.id, error: guardError };
+          return { provider: p.id, resolved };
         } catch (e) {
           const error: SkillRuntimeError = { code: 'provider_error', provider: p.id, message: String(e) };
           return { provider: p.id, error };
@@ -383,128 +538,127 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   }
 
   async search(input: SearchSkillsInput): Promise<SkillResponse<SearchResult[]>> {
-    // Search "supporting path" = a native search provider, OR the list-based fallback,
-    // which is available iff ≥1 provider supports `list` (declares capability + method).
-    const native = this.providers.find((p) => p.capabilities.search && p.search);
-    const hasListFallback = this.providers.some((p) => p.capabilities.list && Boolean(p.list));
+    // Federated search (Task 15; design §4b — mirrors the `list()` aggregation exactly).
+    //
+    // Build the ordered set of CONTRIBUTORS in provider-precedence order. Each provider
+    // contributes EITHER through its native `search` (when it declares the capability AND
+    // exposes the method) OR — for a listable NON-search provider — through the documented
+    // list+substring fallback (Req 3.3). A native-search provider is never ALSO
+    // list-fallbacked: the fallback exists only for providers that cannot search, so a
+    // provider is counted exactly once and never double-serves the same query.
+    type Contributor =
+      | { kind: 'native'; provider: SkillProvider & Required<Pick<SkillProvider, 'search'>> }
+      | { kind: 'fallback'; provider: SkillProvider & Required<Pick<SkillProvider, 'list'>> };
 
-    // Polarity branch 1 — no path can serve the operation at all → `unsupported`
-    // (Req 3.4): neither a native search provider nor a list-based fallback exists.
-    if (!native?.search && !hasListFallback) {
-      return { ok: false, error: { code: 'unsupported', capability: 'search' } };
-    }
-
-    // Prefer a provider that natively supports search.
-    if (native?.search) {
-      try {
-        const raw = await native.search(input);
-        // Apply the same dedupe/conflict treatment to search results (by descriptor.fqid).
-        const { deduped, conflicts } = this.dedupeWithConflicts(
-          raw,
-          (r) => r.descriptor.fqid,
-          (r) => r.descriptor,
-        );
-        const sources: AggregateDiagnostics['sources'] = [
-          { provider: native.id, ok: true, count: deduped.length },
-        ];
-        const provenance = attachAggregateDiagnostics(
-          { fqid: '*', provider: native.id, source: 'search:native' },
-          { sources, conflicts },
-        );
-        return { ok: true, data: deduped, provenance };
-      } catch (e) {
-        // The native search failed. Record it as the failing source and PREFER the
-        // documented fallback (resilience + matches the bundled-deployment behavior). If
-        // no list-based fallback exists, the native attempt was the only supporting path,
-        // so every supporting provider failed → `aggregate_error` (Req 4.8).
-        const nativeError: SkillRuntimeError = {
-          code: 'provider_error',
-          provider: native.id,
-          message: String(e),
-        };
-        if (!hasListFallback) {
-          return { ok: false, error: { code: 'aggregate_error', failures: [{ provider: native.id, error: nativeError }] } };
-        }
-        return this.searchViaListFallback(input, {
-          extraSources: [{ provider: native.id, ok: false, error: nativeError }],
-          fallbackLabel: 'search:fallback(list+substring) after native search failed',
-          extraFailures: [{ provider: native.id, error: nativeError }],
+    const contributors: Contributor[] = [];
+    for (const p of this.providers) {
+      if (p.capabilities.search && p.search) {
+        contributors.push({
+          kind: 'native',
+          provider: p as SkillProvider & Required<Pick<SkillProvider, 'search'>>,
+        });
+      } else if (p.capabilities.list && p.list) {
+        contributors.push({
+          kind: 'fallback',
+          provider: p as SkillProvider & Required<Pick<SkillProvider, 'list'>>,
         });
       }
     }
 
-    // No native search → degrade to the documented list+substring fallback.
-    return this.searchViaListFallback(input, {
-      extraSources: [],
-      fallbackLabel: 'search:fallback(list+substring)',
-      extraFailures: [],
-    });
-  }
-
-  /**
-   * Search fallback: serve `search` THROUGH `list` + substring match when no provider
-   * offers native search (or after a native search failed). The fallback inherits `list`'s
-   * polarity exactly (design §4b step 4):
-   * - `list` → `unsupported` (no list providers) ⇒ search is `unsupported` (capability:'search');
-   * - `list` → `aggregate_error` (every list provider failed) ⇒ propagate as the search
-   *   failure, merging any prior (native) failure so each provider's error is preserved (Req 4.8);
-   * - `list` → `ok` ⇒ apply the substring filter and return `ok` (possibly empty, Req 4.7).
-   *
-   * `extraSources`/`fallbackLabel`/`extraFailures` carry diagnostics from a preceding native
-   * attempt so the surfaced provenance/aggregate error reflects the full supporting set.
-   */
-  private async searchViaListFallback(
-    input: SearchSkillsInput,
-    opts: {
-      extraSources: AggregateDiagnostics['sources'];
-      fallbackLabel: string;
-      extraFailures: Array<{ provider: string; error: SkillRuntimeError }>;
-    },
-  ): Promise<SkillResponse<SearchResult[]>> {
-    const listed = await this.list();
-    if (!listed.ok) {
-      // No list providers → the whole search operation is unsupported (name the capability
-      // the CALLER asked for, not the internal `list` it delegated to).
-      if (listed.error.code === 'unsupported') {
-        return { ok: false, error: { code: 'unsupported', capability: 'search' } };
-      }
-      // Every list provider failed → propagate as an aggregate search failure, preserving
-      // each provider's error code and merging any prior native-search failure (Req 4.8).
-      if (listed.error.code === 'aggregate_error') {
-        return {
-          ok: false,
-          error: {
-            code: 'aggregate_error',
-            failures: [...opts.extraFailures, ...listed.error.failures],
-          },
-        };
-      }
-      return listed;
+    // Polarity branch 1 — no path can serve the operation at all → `unsupported`
+    // (Req 3.4): neither a native-search provider nor a listable fallback provider exists.
+    if (contributors.length === 0) {
+      return { ok: false, error: { code: 'unsupported', capability: 'search' } };
     }
 
-    const listDiagnostics = readAggregateDiagnostics(listed.provenance);
+    const usedFallback = contributors.some((c) => c.kind === 'fallback');
     const q = input.query.toLowerCase();
-    const matched: SearchResult[] = listed.data
-      .filter((d) => d.name.toLowerCase().includes(q))
-      .slice(0, input.limit ?? listed.data.length)
-      .map((descriptor) => ({ descriptor, score: 1 }));
-    // `list` already deduped by FQID, so this is identity here; running it keeps the
-    // treatment uniform and surfaces any residual same-FQID clash deterministically.
+
+    // INTERIM fan-out (open-item B): invoke every contributor concurrently with
+    // `Promise.all`, exactly as `list()` does, bounded only by registry size. A
+    // throwing/failing contributor is RECORDED in `sources`, never propagated as a throw
+    // (aggregate totality, Req 2.6 + 4.3). A `FanoutPolicy` injects here later unchanged.
+    const outcomes = await Promise.all(
+      contributors.map(async (c) => {
+        try {
+          if (c.kind === 'native') {
+            const results = await c.provider.search(input);
+            // Descriptor identity guard (Req 5.7, 1.5): native-search results carry
+            // provider-produced descriptors; reject a batch with any invalid identity as a
+            // `bad_request` source (items not admitted), preserving partial-failure resilience.
+            const guardError = this.guardDescriptors(results.map((r) => r.descriptor));
+            if (guardError) return { provider: c.provider.id, error: guardError };
+            return { provider: c.provider.id, results };
+          }
+          // Listable non-search provider → serve `search` over THAT provider's own
+          // descriptors via list + substring match (Req 3.3, the documented fallback).
+          const listed = await c.provider.list();
+          // Same descriptor identity guard before the fallback admits any descriptor.
+          const guardError = this.guardDescriptors(listed.map((r) => r.descriptor));
+          if (guardError) return { provider: c.provider.id, error: guardError };
+          const results: SearchResult[] = listed
+            .filter((r) => r.descriptor.name.toLowerCase().includes(q))
+            .map((r) => ({ descriptor: r.descriptor, score: 1 }));
+          return { provider: c.provider.id, results };
+        } catch (e) {
+          const error: SkillRuntimeError = {
+            code: 'provider_error',
+            provider: c.provider.id,
+            message: String(e),
+          };
+          return { provider: c.provider.id, error };
+        }
+      }),
+    );
+
+    // Per-provider outcomes (Req 4.1, 4.3) + collected results, in providers order.
+    const sources: AggregateDiagnostics['sources'] = [];
+    const collected: SearchResult[] = [];
+    for (const outcome of outcomes) {
+      if ('error' in outcome) {
+        sources.push({ provider: outcome.provider, ok: false, error: outcome.error });
+        continue;
+      }
+      sources.push({ provider: outcome.provider, ok: true, count: outcome.results.length });
+      collected.push(...outcome.results);
+    }
+
+    // INTERIM dedupe by exact FQID + conflict surfacing (Req 4.2, 4.4): keep the first
+    // occurrence (provider precedence — no silent "best" pick); never silently collapse a
+    // same-FQID-differing-content clash. Identical treatment to `list()`.
     const { deduped, conflicts } = this.dedupeWithConflicts(
-      matched,
+      collected,
       (r) => r.descriptor.fqid,
       (r) => r.descriptor,
     );
-    const diagnostics: AggregateDiagnostics = {
-      sources: [...opts.extraSources, ...(listDiagnostics?.sources ?? [])],
-      conflicts: [...(listDiagnostics?.conflicts ?? []), ...conflicts],
-      fallbacksApplied: [opts.fallbackLabel],
-    };
+    const data = input.limit !== undefined ? deduped.slice(0, input.limit) : deduped;
+
+    // Polarity branch 4 — every contributing provider failed → `aggregate_error` preserving
+    // each provider's returned error code (Req 4.8). `contributors.length >= 1` here, so
+    // `sources` is non-empty and `every` is a genuine all-failed test, not vacuous.
+    if (sources.every((s) => !s.ok)) {
+      const failures = sources.map((s) => ({ provider: s.provider, error: s.error! }));
+      return { ok: false, error: { code: 'aggregate_error', failures } };
+    }
+
+    // Polarity branches 2 & 3 — at least one contributor succeeded → `ok: true` with the
+    // (possibly partial, possibly empty) collection + aggregate diagnostics (Req 4.6, 4.7).
+    // When any listable non-search provider participated, the documented fallback was used
+    // and is recorded in `fallbacksApplied` (Req 3.3); the provenance `source` then reflects
+    // the fallback. A pure native-search aggregation reports `search:native`.
+    const diagnostics: AggregateDiagnostics = { sources, conflicts };
+    if (usedFallback) {
+      diagnostics.fallbacksApplied = ['search:fallback(list+substring)'];
+    }
     const provenance = attachAggregateDiagnostics(
-      { fqid: '*', provider: 'runtime', source: opts.fallbackLabel },
+      {
+        fqid: '*',
+        provider: 'runtime',
+        source: usedFallback ? 'search:fallback(list+substring)' : 'search:native',
+      },
       diagnostics,
     );
-    return { ok: true, data: deduped, provenance };
+    return { ok: true, data, provenance };
   }
 
   async getReferences(input: GetReferencesInput): Promise<SkillResponse<ReferenceDescriptor[]>> {
@@ -539,10 +693,17 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
       };
     }
     // Path-traversal boundary (Req 11.4): reject an out-of-bounds reference path BEFORE
-    // delegating, so the out-of-bounds location is never read.
-    const pathGuard = this.enforceWithinRoot(r.resolved.providerId, input.reference);
+    // delegating, so the out-of-bounds location is never read. The root is the PROVIDER's
+    // declared resource root (correctly scoped to the resolved skill's references), so the
+    // guard catches a cross-skill reference, not only a `..` segment.
+    const pathGuard = this.enforceWithinRoot(provider, r.resolved, input.reference);
     if (pathGuard) return pathGuard;
     try {
+      // Pre-read content-size boundary (Req 11.5, "shall not load in full"): reject an
+      // oversize reference body declared by the optional readMetadata probe BEFORE it is
+      // materialized. Absent probe → fall through to the post-read backstop.
+      const preGuard = await this.enforceContentSizePreRead(provider, r.resolved, input.reference);
+      if (preGuard) return preGuard;
       const data = await provider.readReference(r.resolved, input.reference);
       // Content-size boundary (Req 11.5): reject oversize content as a RETURNED error.
       const sizeGuard = this.enforceContentSize(r.resolved.providerId, data.body);

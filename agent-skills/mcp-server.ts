@@ -39,12 +39,16 @@
  *     identical, because the bundled provider reuses the same `FileResolver`.
  *   - `list_references` renders `JSON.stringify(paths)` (the same JSON array of paths).
  *   - `read_reference` renders the raw file body and preserves the `..` traversal guard.
- *   - `list_skills` serves the manifest document `JSON.stringify(manifest, null, 2)`
- *     unchanged — this is the published list contract (a registry document, NOT the
- *     runtime's `SkillDescriptor[]`), so it is served from the manifest source directly.
- *   - `search_skills` keeps the existing keyword search index, preserving the published
- *     result shape and ranking (the bundled provider declares `search: false`, so the
- *     runtime would otherwise fall back to list+substring and change ranking).
+ *   - `list_skills` delegates to `runtime.list()` and renders the result through the
+ *     `ManifestPresenter`, which reconstructs the published manifest registry document
+ *     (`JSON.stringify(manifest, null, 2)`) from the runtime's AUTHORITATIVE skill set —
+ *     byte-for-byte identical because the bundled provider lists exactly the manifest
+ *     skills in manifest order (Req 9.4, 9.8).
+ *   - `search_skills` delegates to `runtime.search()` and renders the result through the
+ *     `SearchPresenter`, preserving the published `{skill,score,description,layer,
+ *     layerName}` shape and ranking. The legacy keyword index is now the bundled provider's
+ *     native `search` implementation (enabled via `{ search: true }`), NOT an adapter
+ *     side-channel (Req 9.4, 9.1).
  *   - Provenance is NOT surfaced at the MCP response level (Req 9.7); the renderers emit
  *     only the typed `data`, never the provenance envelope.
  *
@@ -69,17 +73,17 @@
  *     plus the optional `resolvedFrom`.
  *
  * `list_skills` (serves the manifest registry document) and `search_skills` (serves the
- * keyword index) are UNAFFECTED by the flag: neither is backed by a single runtime
- * `SkillResponse` provenance envelope, so there is nothing to stage for them. The staged
- * shape applies only to the runtime-backed tools `read_skill`, `list_references`, and
- * `read_reference`.
+ * keyword index) are UNAFFECTED by the flag: both delegate to the runtime, but neither is
+ * backed by a single runtime `SkillResponse` provenance envelope (one renders an aggregate
+ * registry document, the other a ranked list), so there is nothing to stage for them. The
+ * staged shape applies only to the runtime-backed body/reference tools `read_skill`,
+ * `list_references`, and `read_reference`.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createFileResolver } from './lib/file-resolver.js';
-import { buildSearchIndex } from './lib/search-index.js';
 import {
   COMPAT_RENDER_OPTIONS,
   EXPOSE_PROVENANCE_ENV,
@@ -91,8 +95,8 @@ import {
   type AdapterRenderOptions,
   type ToolResult,
 } from './lib/tool-render.js';
-import { handleListSkills } from './tools/list-skills.js';
-import { handleSearchSkills } from './tools/search-skills.js';
+import { presentManifest } from './lib/manifest-presenter.js';
+import { presentSearch } from './lib/search-presenter.js';
 import { FilesystemSkillProvider } from './runtime/providers/filesystem-provider.js';
 import { SkillProviderRegistry, createRuntimeFromRegistry } from './runtime/registry.js';
 import { bundledTrustPolicy } from './runtime/trust.js';
@@ -129,21 +133,29 @@ async function main(): Promise<void> {
   // The provider reuses the existing FileResolver, so published-name reads are
   // byte-for-byte identical (Req 3.6, 9.2).
   const resolver = createFileResolver();
-  const provider = new FilesystemSkillProvider();
-  // The bundled (first-party) provider registers as `trusted` (design §9, Req 11.1) with
-  // `permittedRoot` = the package root, so the runtime's path-traversal boundary (Task 9.2,
-  // Req 11.4) rejects any reference path that escapes the package as a returned
-  // `out_of_bounds` error. This is internal registration metadata only — it is not surfaced
-  // at MCP tool output, and valid published reference reads stay byte-for-byte identical.
+  // Enable the bundled provider's NATIVE search so `runtime.search()` serves the keyword
+  // index (preserving published ranking) instead of the list+substring fallback (Req 9.4).
+  const provider = new FilesystemSkillProvider({ search: true });
+  // The bundled (first-party) provider registers as `trusted` (design §9, Req 11.1). The
+  // runtime's path-traversal boundary (Task 9.2/23, Req 11.4) enforces containment against
+  // the provider's DECLARED resource root (`resourceRoot` → the resolved skill's references
+  // directory), so it rejects any reference path that escapes that skill's references root —
+  // including a cross-skill path with no `..` — as a returned `out_of_bounds` error. The
+  // coarse `permittedRoot` = package root is retained only as a backstop for paths the
+  // provider does not scope. This is internal registration metadata only — it is not
+  // surfaced at MCP tool output, and valid published reference reads stay byte-for-byte
+  // identical.
   const registry = new SkillProviderRegistry([
     { provider, trust: bundledTrustPolicy(resolver.packageRoot) },
   ]);
   const runtime = createRuntimeFromRegistry({ kind: 'in-process' }, registry);
 
-  // The manifest document (for `list_skills`) and the keyword search index (for
-  // `search_skills`) are served from the manifest source directly — these are the
-  // published document/search contracts, not skill-name resolution. The adapter holds
-  // no name-resolution logic of its own.
+  // The published manifest registry document (rendered by `list_skills`) is read from the
+  // manifest source: it is the published document template whose per-entry metadata
+  // (`versionRange`/`status`/…) is not carried on runtime descriptors. The runtime remains
+  // AUTHORITATIVE for membership/order via `runtime.list()`; the manifest only supplies the
+  // document fields the `ManifestPresenter` joins back (Req 9.8). The adapter holds no
+  // name-resolution logic of its own.
   const manifest = await resolver.readManifest();
 
   // Published set (Req 9.6): the manifest's skill names. Used ONLY to decide whether to
@@ -161,13 +173,6 @@ async function main(): Promise<void> {
     );
   }
 
-  // Pre-load all SKILL.md contents for the search index (unchanged behavior).
-  const skillContents = new Map<string, string>();
-  for (const skill of manifest.skills) {
-    skillContents.set(skill.name, await resolver.readSkill(skill.name));
-  }
-  const searchIndex = buildSearchIndex(manifest, skillContents);
-
   const server = new McpServer(
     { name: '@stdiobus/skills', version: manifest.version },
     { capabilities: { tools: {} } },
@@ -175,15 +180,15 @@ async function main(): Promise<void> {
 
   // --- Tool registrations ---
 
-  // list_skills: serve the manifest registry document byte-for-byte (published list
-  // contract — NOT the runtime's SkillDescriptor[]).
+  // list_skills: delegate to the runtime; render the AUTHORITATIVE descriptor list back
+  // into the published manifest registry document (byte-for-byte for the bundled set).
   server.registerTool(
     'list_skills',
     {
       description: 'List all available skills with their layers and metadata',
       inputSchema: {},
     },
-    async () => handleListSkills(resolver),
+    async (): Promise<ToolResult> => presentManifest(await runtime.list(), manifest),
   );
 
   // read_skill: delegate to the runtime; render SkillContent.body raw.
@@ -247,14 +252,26 @@ async function main(): Promise<void> {
     },
   );
 
-  // search_skills: keep the existing keyword search index (preserves result shape/ranking).
+  // search_skills: delegate to the runtime; render the ranked results back into the
+  // published result shape. Ranking comes from the bundled provider's native keyword index
+  // (enabled above), so `runtime.search()` preserves the published ordering (Req 9.4).
   server.registerTool(
     'search_skills',
     {
       description: 'Search skills by keyword or topic',
       inputSchema: { query: z.string().min(1) },
     },
-    async (args) => handleSearchSkills(args, searchIndex),
+    async (args): Promise<ToolResult> => {
+      // Input validation (NOT name resolution): preserve the pre-migration non-empty-query
+      // contract — a whitespace-only query is a tool error, not a delegated search.
+      if (args.query.trim().length === 0) {
+        return {
+          content: [{ type: 'text', text: 'search_skills: Query must be a non-empty string.' }],
+          isError: true,
+        };
+      }
+      return presentSearch(await runtime.search({ query: args.query }));
+    },
   );
 
   // --- Connect transport ---

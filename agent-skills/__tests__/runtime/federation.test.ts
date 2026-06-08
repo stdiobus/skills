@@ -39,6 +39,7 @@ import { InProcessSkillsRuntime } from '../../runtime/in-process-runtime.js';
 import { readAggregateDiagnostics } from '../../runtime/federation.js';
 import type {
   ResolvedSkill,
+  SearchResult,
   SkillDescriptor,
   SkillProvider,
   SkillRef,
@@ -308,5 +309,194 @@ describe('search aggregation — list+substring fallback diagnostics (Req 3.3)',
     if (!diag) return;
     expect(diag.fallbacksApplied).toBeDefined();
     expect(diag.fallbacksApplied).toContain('search:fallback(list+substring)');
+  });
+});
+
+// =============================================================================
+// Federated search (Task 15) — `search()` aggregates across ALL native-search
+// providers AND merges the list+substring fallback for listable non-search
+// providers, applying the SAME dedupe/conflict + partial-failure polarity as
+// `list()`. Before this task, `search()` used `providers.find(...)` — only the
+// FIRST native-search provider served the query and the list fallback was never
+// merged when a native provider was chosen, so search was not federated.
+//
+// Validates: Requirements 4.1, 4.2, 4.3, 4.6, 3.3
+// =============================================================================
+
+interface SearchProviderOpts {
+  /** Fixed search results, or 'throw' to make `search()` throw (→ provider_error source). */
+  search: SearchResult[] | 'throw';
+  /** Whether the provider DECLARES `capabilities.search` (and exposes a `search` method). */
+  capSearch?: boolean;
+}
+
+/**
+ * A real SkillProvider whose ONLY declared capability is native `search`. `resolve` is
+ * trivial (search never routes through resolve) but present to satisfy the contract.
+ */
+function searchProvider(id: string, opts: SearchProviderOpts): SkillProvider {
+  const capSearch = opts.capSearch ?? true;
+
+  const provider: SkillProvider = {
+    id,
+    capabilities: { read: false, list: false, search: capSearch, references: false },
+    async resolve(): Promise<ResolvedSkill[]> {
+      return [];
+    },
+  };
+
+  if (capSearch) {
+    provider.search = async (): Promise<SearchResult[]> => {
+      if (opts.search === 'throw') throw new Error(`${id}.search intentionally threw`);
+      return opts.search;
+    };
+  }
+
+  return provider;
+}
+
+function searchResult(provider: string, name: string, score = 1): SearchResult {
+  return { descriptor: desc(provider, name), score };
+}
+
+describe('search federation — aggregates ALL native-search providers (Req 4.1)', () => {
+  it('merges results from every native-search provider and records each source', async () => {
+    const runtime = new InProcessSkillsRuntime([
+      searchProvider('s1', { search: [searchResult('s1', 'alpha')] }),
+      searchProvider('s2', { search: [searchResult('s2', 'beta')] }),
+    ]);
+
+    const resp = await runtime.search({ query: 'whatever' });
+
+    expect(resp.ok).toBe(true);
+    if (!resp.ok) return;
+    // BOTH native providers contributed — not just the first (the pre-Task-15 bug).
+    expect(resp.data.map((r) => r.descriptor.fqid).sort()).toEqual(['s1:alpha', 's2:beta']);
+
+    const diag = readAggregateDiagnostics(resp.provenance);
+    expect(diag).toBeDefined();
+    if (!diag) return;
+    expect(diag.sources.map((s) => s.provider).sort()).toEqual(['s1', 's2']);
+    expect(diag.sources.every((s) => s.ok)).toBe(true);
+    // No fallback provider participated → pure native aggregation.
+    expect(resp.provenance.source).toBe('search:native');
+    expect(diag.fallbacksApplied).toBeUndefined();
+    expect(diag.conflicts).toEqual([]);
+  });
+});
+
+describe('search federation — merges native search WITH the list fallback (Req 3.3, 4.1)', () => {
+  it('aggregates a native-search provider AND a listable non-search provider', async () => {
+    const runtime = new InProcessSkillsRuntime([
+      searchProvider('native', { search: [searchResult('native', 'alpha')] }),
+      listProvider('listable', {
+        list: [
+          makeResolved('listable', desc('listable', 'alpha-skill')),
+          makeResolved('listable', desc('listable', 'beta-skill')),
+        ],
+      }),
+    ]);
+
+    const resp = await runtime.search({ query: 'alpha' });
+
+    expect(resp.ok).toBe(true);
+    if (!resp.ok) return;
+    // The native provider contributes its result; the listable non-search provider is
+    // served by the list+substring fallback, contributing ONLY the 'alpha' substring match.
+    // Before Task 15, choosing a native provider dropped the list fallback entirely.
+    expect(resp.data.map((r) => r.descriptor.fqid).sort()).toEqual([
+      'listable:alpha-skill',
+      'native:alpha',
+    ]);
+
+    const diag = readAggregateDiagnostics(resp.provenance);
+    expect(diag).toBeDefined();
+    if (!diag) return;
+    expect(diag.sources.map((s) => s.provider).sort()).toEqual(['listable', 'native']);
+    // The documented fallback was used (a listable non-search provider participated) and
+    // is recorded in diagnostics (Req 3.3).
+    expect(diag.fallbacksApplied).toContain('search:fallback(list+substring)');
+    expect(resp.provenance.source).toBe('search:fallback(list+substring)');
+  });
+});
+
+describe('search federation — dedupe + conflict (Req 4.2, 4.4)', () => {
+  it('keeps the first occurrence and surfaces a conflict for same-FQID differing content', async () => {
+    const SHARED = 'shared:dup';
+    const runtime = new InProcessSkillsRuntime([
+      searchProvider('s1', {
+        search: [
+          { descriptor: { fqid: SHARED, name: 'dup', provider: 's1', source: 'fake://s1/dup', layer: 1 }, score: 1 },
+        ],
+      }),
+      searchProvider('s2', {
+        search: [
+          { descriptor: { fqid: SHARED, name: 'dup', provider: 's2', source: 'fake://s2/dup', layer: 2 }, score: 1 },
+        ],
+      }),
+    ]);
+
+    const resp = await runtime.search({ query: 'dup' });
+
+    expect(resp.ok).toBe(true);
+    if (!resp.ok) return;
+    // Exactly ONE entry for the shared FQID, the FIRST occurrence (s1) — no silent pick.
+    expect(resp.data).toHaveLength(1);
+    expect(resp.data[0].descriptor.fqid).toBe(SHARED);
+    expect(resp.data[0].descriptor.provider).toBe('s1');
+
+    const diag = readAggregateDiagnostics(resp.provenance);
+    expect(diag).toBeDefined();
+    if (!diag) return;
+    expect(diag.conflicts).toHaveLength(1);
+    expect(diag.conflicts[0].fqid).toBe(SHARED);
+    expect(diag.conflicts[0].providers.slice().sort()).toEqual(['s1', 's2']);
+  });
+});
+
+describe('search federation — partial failure resilience (Req 4.3, 4.6)', () => {
+  it('returns ok:true with surviving data and records the failing native source', async () => {
+    const runtime = new InProcessSkillsRuntime([
+      searchProvider('ok', { search: [searchResult('ok', 'alpha')] }),
+      searchProvider('boom', { search: 'throw' }),
+    ]);
+
+    const resp = await runtime.search({ query: 'x' });
+
+    // One native provider failed, one succeeded → partial success, not a collapse.
+    expect(resp.ok).toBe(true);
+    if (!resp.ok) return;
+    expect(resp.data.map((r) => r.descriptor.fqid)).toEqual(['ok:alpha']);
+
+    const diag = readAggregateDiagnostics(resp.provenance);
+    expect(diag).toBeDefined();
+    if (!diag) return;
+    const failing = diag.sources.find((s) => s.provider === 'boom');
+    expect(failing).toBeDefined();
+    expect(failing!.ok).toBe(false);
+    expect(failing!.error?.code).toBe('provider_error');
+    const succeeding = diag.sources.find((s) => s.provider === 'ok');
+    expect(succeeding!.ok).toBe(true);
+    expect(succeeding!.count).toBe(1);
+  });
+});
+
+describe('search federation — every native provider failed (Req 4.8)', () => {
+  it('returns aggregate_error preserving each provider code when no fallback exists', async () => {
+    const runtime = new InProcessSkillsRuntime([
+      searchProvider('boom-a', { search: 'throw' }),
+      searchProvider('boom-b', { search: 'throw' }),
+    ]);
+
+    const resp = await runtime.search({ query: 'x' });
+
+    expect(resp.ok).toBe(false);
+    if (resp.ok) return;
+    expect(resp.error.code).toBe('aggregate_error');
+    if (resp.error.code !== 'aggregate_error') return;
+    expect(resp.error.failures.map((f) => f.provider).sort()).toEqual(['boom-a', 'boom-b']);
+    for (const f of resp.error.failures) {
+      expect(f.error.code).toBe('provider_error');
+    }
   });
 });

@@ -129,6 +129,7 @@ const MOCK_MANIFEST: SkillManifest = {
 function createMockResolver(overrides: Partial<FileResolver> = {}): FileResolver {
   return {
     packageRoot: '/mock/root',
+    referencesRoot: jest.fn((s: string) => `/mock/root/agent-skills/${s}/references`),
     readManifest: jest.fn().mockResolvedValue(MOCK_MANIFEST),
     readSkill: jest.fn(),
     listReferences: jest.fn(),

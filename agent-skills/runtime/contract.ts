@@ -115,9 +115,40 @@ export interface ReferenceContent {
   body: string;
 }
 
+/**
+ * Pre-read content metadata returned by the OPTIONAL provider size probe
+ * ({@link SkillProvider.readMetadata}; design §9, Req 11.5).
+ *
+ * Lets a provider declare the byte size of a skill body (or a reference body) AT SOURCE,
+ * so the runtime can reject oversize content via the byte-count path BEFORE the body is
+ * materialized. The probe is transport-agnostic — a remote/bus provider answers from a
+ * `Content-Length`-style header or registry metadata, NOT `fs.stat` — so a remote provider
+ * cannot ship a 200MB body before the size check runs.
+ *
+ * `sizeBytes` is OPTIONAL: a provider that cannot cheaply determine the size at source
+ * omits it, and the runtime falls back to the post-read content-size backstop. The shape is
+ * intentionally an object (not a bare `number`) so it can carry further pre-read metadata in
+ * future without changing the probe signature.
+ */
+export interface SkillContentMetadata {
+  /** Declared byte length of the content at source, or omitted when unknown. */
+  sizeBytes?: number;
+}
+
 export interface SearchResult {
   descriptor: SkillDescriptor;
   score: number;
+  /**
+   * Optional, provider-supplied display description / snippet for the matched skill.
+   *
+   * Additive presentation field: a search result commonly carries a human-facing
+   * description alongside its identity and score. It is OPTIONAL and provider-supplied —
+   * the runtime never synthesizes it, and the list+substring fallback leaves it absent.
+   * Identity, dedupe, and conflict detection key on `descriptor.fqid` only, so this field
+   * never participates in equivalence. Presenters (e.g. the MCP `search_skills` surface)
+   * use it to preserve the published result shape without an adapter side-channel.
+   */
+  description?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,4 +279,48 @@ export interface SkillProvider {
   search?(input: SearchSkillsInput): Promise<SearchResult[]>;
   listReferences?(resolved: ResolvedSkill): Promise<ReferenceDescriptor[]>;
   readReference?(resolved: ResolvedSkill, reference: string): Promise<ReferenceContent>;
+
+  /**
+   * OPTIONAL pre-read size probe (Req 11.5, "shall not load in full"; design §9).
+   *
+   * When implemented, the runtime calls this BEFORE {@link read}/{@link readReference} so an
+   * untrusted provider's oversize content is rejected via the byte-count path WITHOUT being
+   * materialized. The probe reports the body size AT SOURCE:
+   * - `reference` omitted → size of the skill body served by {@link read};
+   * - `reference` supplied → size of that reference body served by {@link readReference}.
+   *
+   * It is a CONTRACT, not an `fs.stat` binding: a remote/bus provider answers from a
+   * declared `Content-Length`-style size so it cannot transmit a huge body before the check.
+   * A provider that cannot determine the size cheaply returns `{ sizeBytes: undefined }` (or
+   * omits the field), and the runtime falls back to the post-read content-size backstop.
+   * Capability-optional by PRESENCE: a provider that does not implement this method opts out,
+   * and the runtime relies on the backstop — exactly the bundled-provider behavior.
+   */
+  readMetadata?(resolved: ResolvedSkill, reference?: string): Promise<SkillContentMetadata>;
+
+  /**
+   * OPTIONAL provider resource-scope declaration (Milestone-002 provider resource-scope
+   * contract; design §9, Req 11.4).
+   *
+   * Returns the absolute filesystem root that genuinely contains the resources for a
+   * resolved skill (and, optionally, a specific reference) — e.g. the bundled provider's
+   * `{packageRoot}/agent-skills/{skill}/references` directory. The runtime enforces
+   * {@link checkWithinRoot} against THIS root so its path-traversal boundary is a TRUE
+   * generalization of the provider's own containment: it rejects a cross-skill reference
+   * that escapes the skill's references root (e.g. an absolute path into a SIBLING skill),
+   * not merely a `..` segment.
+   *
+   * Knowing the on-disk layout is the PROVIDER's job, never the runtime's: the runtime must
+   * not invent filesystem containment. A provider with no filesystem resource root (a
+   * remote registry, a DB, a virtual provider) does NOT implement this method (or returns
+   * `undefined`) and thereby OPTS OUT — the runtime then applies no path guard and relies on
+   * the provider's own containment as the backstop. Capability-optional by PRESENCE, exactly
+   * like {@link readMetadata}.
+   *
+   * @param resolved - the resolved skill whose resource root is requested.
+   * @param reference - the specific reference path being admitted, when applicable.
+   * @returns the absolute resource root to enforce containment against, or `undefined` to
+   *   opt out (no filesystem resource root for this provider).
+   */
+  resourceRoot?(resolved: ResolvedSkill, reference?: string): string | undefined;
 }

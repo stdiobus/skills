@@ -384,6 +384,93 @@ export function mayPromoteAssistiveClassification(
 }
 
 // ---------------------------------------------------------------------------
+// Assistive-only security invariant — the SINGLE narrow promotion surface
+// (Task 32 / T32; Req 7.4, 11.6)
+// ---------------------------------------------------------------------------
+
+/**
+ * The MAXIMAL influence an assistive classification may ever have on authoritative
+ * registry state: a suggested `layer` and/or `category`, and NOTHING ELSE.
+ *
+ * SECURITY INVARIANT (Req 7.4, 11.6). A `classify` / {@link AssistiveClassification} result
+ * may ONLY ever suggest a skill's `layer`/`category`. It must NEVER be an input to — and this
+ * type deliberately cannot express — any of:
+ *
+ *   - trust tier selection (see {@link mayPromoteClassification}, `resolveTrustPolicy`),
+ *   - namespace / ownership decisions,
+ *   - authority / allow-list membership,
+ *   - sandbox / isolation level (see `checkIsolation` in `./security/boundary.js`),
+ *   - provider tier,
+ *   - any admission decision (`fetch` / `import` / `read`; see `checkWithinRoot` /
+ *     `checkContentSize` / `checkIsolation`).
+ *
+ * Those security-boundary predicates key EXCLUSIVELY on {@link TrustPolicy} (and structural
+ * path/size facts); none of them accepts an {@link AssistiveClassification}, a
+ * {@link ClassifyResult}, or this type as a parameter — so a classify hint structurally
+ * cannot flow into them, at ANY confidence value.
+ */
+export interface AuthoritativeClassification {
+  /** Promoted layer, when the assistive hint carried one. */
+  readonly layer?: number;
+  /** Promoted category, when the assistive hint carried one. */
+  readonly category?: string;
+}
+
+/**
+ * The ONE narrow surface through which an assistive `classify` hint may become authoritative
+ * registry metadata (Task 32; Req 7.4, 11.6).
+ *
+ * This is the single, typed, documented boundary that converts an {@link AssistiveClassification}
+ * into authoritative metadata, and it does so under a HARD gate:
+ *
+ *   - The promotion decision is delegated VERBATIM to {@link mayPromoteAssistiveClassification}
+ *     (which reuses {@link mayPromoteClassification} in `trust.ts`) — the promotion rule is NOT
+ *     duplicated here. An assistive classification becomes authoritative ONLY via explicit
+ *     pin/persist (`opts.pinned || opts.persisted`) OR a trusted-authority provider
+ *     (`policy.tier === 'trusted'`). For an untrusted provider WITHOUT pin/persist, promotion is
+ *     refused regardless of {@link ClassifyResult.confidence} — confidence is not even consulted
+ *     (the gate has no confidence parameter), so a maximal `confidence: 1.0` cannot promote.
+ *   - When refused, the function returns `undefined`: the classification STAYS assistive and no
+ *     authoritative metadata is produced.
+ *   - When permitted, the ONLY fields that cross are `layer`/`category` (an
+ *     {@link AuthoritativeClassification}). The trust tier, namespace, authority, allow-list,
+ *     sandbox/isolation level, provider tier, and every admission decision are untouched by this
+ *     function — it neither reads nor returns any of them.
+ *
+ * This makes the assistive-only invariant CHECKABLE in code: the security-boundary functions
+ * (`resolveTrustPolicy`, `checkIsolation`, `checkWithinRoot`, `checkContentSize`) take no classify
+ * input, and the sole classify→authoritative conversion is this gated, layer/category-only surface.
+ *
+ * @param classification - the assistive classification produced by `classify`.
+ * @param policy - the (effective) {@link TrustPolicy} of the classifying provider.
+ * @param opts.pinned - whether the skill is an explicit pinned-subset member.
+ * @param opts.persisted - whether the classification has been explicitly persisted.
+ * @returns the promoted `layer`/`category` when promotion is permitted, else `undefined`
+ *   (the classification remains assistive and is NOT written to authoritative metadata).
+ */
+export function promoteAssistiveClassification(
+  classification: AssistiveClassification,
+  policy: TrustPolicy,
+  opts: { pinned: boolean; persisted: boolean },
+): AuthoritativeClassification | undefined {
+  // HARD GATE — reuse the shared promotion rule; do not duplicate it. Confidence is never an
+  // input to the gate, so no confidence value can override an untrusted, unpinned refusal.
+  if (!mayPromoteAssistiveClassification(policy, opts)) {
+    return undefined;
+  }
+
+  // Narrow surface: ONLY layer/category may ever cross into authoritative metadata.
+  const out: { layer?: number; category?: string } = {};
+  if (classification.result.layer !== undefined) {
+    out.layer = classification.result.layer;
+  }
+  if (classification.result.category !== undefined) {
+    out.category = classification.result.category;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Fallback-safe classification with pinned override (Task 10.2; Req 7.5–7.7)
 // ---------------------------------------------------------------------------
 

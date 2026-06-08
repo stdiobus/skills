@@ -16,6 +16,7 @@ const MOCK_TS_CONTENT = `import { LambdaDefinition } from '@worktif/runtime';\n\
 function createMockResolver(overrides: Partial<FileResolver> = {}): FileResolver {
   return {
     packageRoot: '/mock/root',
+    referencesRoot: jest.fn((s: string) => `/mock/root/agent-skills/${s}/references`),
     readManifest: jest.fn(),
     readSkill: jest.fn(),
     listReferences: jest.fn(),

@@ -32,7 +32,7 @@
  * this task depends on the final grammar being decided.
  */
 
-import type { SkillRuntimeError } from './contract.js';
+import type { SkillDescriptor, SkillRuntimeError } from './contract.js';
 
 /** Parsed components of an FQID under the interim grammar. */
 export interface FqidParts {
@@ -144,4 +144,54 @@ export function descriptorFqid(identity: DescriptorIdentity): DescriptorFqidResu
   }
 
   return { ok: true, fqid };
+}
+
+/**
+ * Descriptor identity guard at the provider ingress / resolution boundary
+ * (Requirement 5.7, 1.5; design §5 "descriptor guard at registration/resolution").
+ *
+ * A provider-produced {@link SkillDescriptor} must carry a valid, non-partial identity
+ * before the runtime admits it — and, critically, before its `fqid` is used as a
+ * dedupe / conflict key. This is a NARROW identity guard only: it checks identity
+ * presence and the FQID byte bound, and does NOT sanitize body/content fields (that
+ * broader provider-boundary sanitizer is tracked separately), nor does it impose
+ * `fqid == provider:name` equality — the runtime treats `fqid` as an opaque, possibly
+ * provider-assigned identity key that federation deliberately allows to diverge from
+ * `provider:name` (so two providers can collide on one FQID and surface a conflict).
+ *
+ * Enforced (all returned as `bad_request`, never thrown):
+ * - missing `provider` or `name` (Req 5.7) — reuses {@link descriptorFqid} so the
+ *   no-partial check and the {@link FQID_MAX_BYTES} bound live in exactly one place;
+ * - missing / empty declared `fqid` (Req 1.5 — every runtime-resolved descriptor carries
+ *   an FQID);
+ * - a declared `fqid` over the {@link FQID_MAX_BYTES} interim bound (oversized identity
+ *   key).
+ *
+ * Returns the {@link SkillRuntimeError} when the descriptor is inadmissible, or `null`
+ * when its identity is valid and may be admitted. The bundled provider, which emits
+ * `formatFqid({ provider, name })` with non-empty provider/name, passes unchanged.
+ */
+export function guardDescriptorIdentity(descriptor: SkillDescriptor): SkillRuntimeError | null {
+  // Req 5.7: reject a descriptor lacking `provider` or `name`, minting NO placeholder
+  // FQID. Delegated to the existing guard so the no-partial rule is not reimplemented.
+  const minted = descriptorFqid({ provider: descriptor.provider, name: descriptor.name });
+  if (!minted.ok) return minted.error;
+
+  // Req 1.5: a runtime-resolved descriptor must CARRY a non-empty FQID. The declared
+  // `fqid` is the runtime's opaque dedupe/identity key (need not equal `provider:name`).
+  if (typeof descriptor.fqid !== 'string' || descriptor.fqid.length === 0) {
+    return { code: 'bad_request', issues: ['descriptor.fqid is required and must be non-empty'] };
+  }
+
+  // Oversized identity key: bound the declared `fqid` by the same interim limit used for a
+  // minted FQID, so a pathological dedupe key is rejected rather than admitted.
+  const byteLength = Buffer.byteLength(descriptor.fqid, 'utf8');
+  if (byteLength > FQID_MAX_BYTES) {
+    return {
+      code: 'bad_request',
+      issues: [`descriptor.fqid exceeds interim limit of ${FQID_MAX_BYTES} bytes (got ${byteLength})`],
+    };
+  }
+
+  return null;
 }

@@ -7,7 +7,7 @@
 import type { SkillManifest } from '../types.js';
 
 /** Layer number → human-readable layer name. */
-const LAYER_NAMES: Record<number, string> = {
+export const LAYER_NAMES: Record<number, string> = {
   1: 'Concepts',
   2: 'API',
   3: 'Patterns',

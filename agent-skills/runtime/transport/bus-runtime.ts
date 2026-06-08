@@ -238,7 +238,11 @@ export class BusSkillsRuntime implements SkillsRuntime {
       const raw = await this.bus.request<unknown>(cap.method, params, {
         timeout: this.cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       });
-      return ParamCodec.decodeResponse(cap, raw); // wire → typed SkillResponse (Req 6.3)
+      // wire → typed SkillResponse, structurally validated at the untrusted-worker
+      // boundary (Req 6.3): a malformed/oversized/reserved-violating response becomes a
+      // returned provider_error carrying the SAME `bus:<pool>` origin marker as a transport
+      // failure below — never passed through, never thrown.
+      return ParamCodec.decodeResponse(cap, raw, `bus:${this.cfg.pool}`);
     } catch (e) {
       // Transport failure (not a provider fault) → typed error, returned not thrown,
       // never a prompt string (Req 6.7). INTERIM: provider_error + bus:<pool> marker;

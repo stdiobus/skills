@@ -14,6 +14,7 @@ const MOCK_REFERENCES = ['common-mistakes.md', 'templates/sqs-worker.ts', 'templ
 function createMockResolver(overrides: Partial<FileResolver> = {}): FileResolver {
   return {
     packageRoot: '/mock/root',
+    referencesRoot: jest.fn((s: string) => `/mock/root/agent-skills/${s}/references`),
     readManifest: jest.fn(),
     readSkill: jest.fn(),
     listReferences: jest.fn().mockResolvedValue(MOCK_REFERENCES),

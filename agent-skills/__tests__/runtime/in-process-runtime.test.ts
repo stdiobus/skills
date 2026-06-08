@@ -422,3 +422,164 @@ describe('InProcessSkillsRuntime — providerLocalRef never leaks (Property 10, 
     expect(containsSentinel(resp)).toBe(false);
   });
 });
+
+// =============================================================================
+// Deterministic, aggregate resolution-failure attribution (Task 20; Req 2.5, 4.8)
+//
+// `resolveOne` attributes a no-candidate outcome from the precedence-ordered
+// resolution failures, NOT from resolve() completion timing:
+//   • exactly one contributing provider threw → that provider's `provider_error`
+//     (single-provider baseline behavior unchanged);
+//   • two or more threw → `aggregate_error` preserving EACH failure's code, in
+//     provider-precedence order (no contributing failure is silently lost);
+//   • every contributing provider cleanly returned zero candidates → `not_found`.
+//
+// Determinism is proven by racing a SLOW-failing first provider against a
+// FAST-failing second: regardless of which resolve() settles first, attribution
+// follows the `providers` array order.
+//
+// Validates: Requirements 2.5, 4.8
+// =============================================================================
+
+/** A provider whose `resolve` rejects after `delayMs`, to control settle order. */
+function makeThrowingProvider(id: string, message: string, delayMs: number): SkillProvider {
+  return {
+    id,
+    capabilities: { read: true, list: false, search: false, references: false },
+    async resolve(): Promise<ResolvedSkill[]> {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      throw new Error(message);
+    },
+  };
+}
+
+/** A provider that cleanly resolves to NO candidate for every ref (never throws). */
+function makeEmptyProvider(id: string, delayMs = 0): SkillProvider {
+  return {
+    id,
+    capabilities: { read: true, list: false, search: false, references: false },
+    async resolve(): Promise<ResolvedSkill[]> {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return [];
+    },
+  };
+}
+
+describe('InProcessSkillsRuntime — deterministic resolution-failure attribution (Req 2.5, 4.8)', () => {
+  it('single throwing provider → provider_error for THAT provider (baseline unchanged)', async () => {
+    const runtime = new InProcessSkillsRuntime([makeThrowingProvider('only', 'boom', 0)]);
+    const resp = await runtime.read({ ref: { kind: 'name', name: 'x' } });
+
+    expect(resp.ok).toBe(false);
+    if (resp.ok) return;
+    expect(resp.error.code).toBe('provider_error');
+    if (resp.error.code !== 'provider_error') return;
+    expect(resp.error.provider).toBe('only');
+    expect(resp.error.message).toContain('boom');
+  });
+
+  it('a single failure beside a clean-empty provider attributes to the failing provider, whatever its position', async () => {
+    // Failing provider FIRST, clean-empty SECOND.
+    const a = new InProcessSkillsRuntime([
+      makeThrowingProvider('faulty', 'E', 20),
+      makeEmptyProvider('empty', 0),
+    ]);
+    const respA = await a.read({ ref: { kind: 'name', name: 'x' } });
+    expect(respA.ok).toBe(false);
+    if (!respA.ok) expect(respA.error.code).toBe('provider_error');
+    if (!respA.ok && respA.error.code === 'provider_error') {
+      expect(respA.error.provider).toBe('faulty');
+    }
+
+    // Clean-empty FIRST, failing provider SECOND — still a single provider_error.
+    const b = new InProcessSkillsRuntime([
+      makeEmptyProvider('empty', 0),
+      makeThrowingProvider('faulty', 'E', 20),
+    ]);
+    const respB = await b.read({ ref: { kind: 'name', name: 'x' } });
+    expect(respB.ok).toBe(false);
+    if (!respB.ok) expect(respB.error.code).toBe('provider_error');
+    if (!respB.ok && respB.error.code === 'provider_error') {
+      expect(respB.error.provider).toBe('faulty');
+    }
+  });
+
+  it('two failing providers → aggregate_error in PRECEDENCE order, independent of completion timing', async () => {
+    // Slow-failing FIRST provider vs fast-failing SECOND: the first still leads.
+    const runtime = new InProcessSkillsRuntime([
+      makeThrowingProvider('first', 'first-failed', 40),
+      makeThrowingProvider('second', 'second-failed', 0),
+    ]);
+    const resp = await runtime.read({ ref: { kind: 'name', name: 'x' } });
+
+    expect(resp.ok).toBe(false);
+    if (resp.ok) return;
+    expect(resp.error.code).toBe('aggregate_error');
+    if (resp.error.code !== 'aggregate_error') return;
+
+    // Every contributing failure is preserved, in provider-precedence order.
+    expect(resp.error.failures.map((f) => f.provider)).toEqual(['first', 'second']);
+    for (const f of resp.error.failures) {
+      expect(f.error.code).toBe('provider_error');
+    }
+    expect(resp.error.failures[0]!.error).toMatchObject({ code: 'provider_error', provider: 'first' });
+    expect(resp.error.failures[1]!.error).toMatchObject({ code: 'provider_error', provider: 'second' });
+  });
+
+  it('reversing the completion timing does not change attribution order', async () => {
+    // Fast-failing FIRST vs slow-failing SECOND: order is STILL [first, second].
+    const runtime = new InProcessSkillsRuntime([
+      makeThrowingProvider('first', 'first-failed', 0),
+      makeThrowingProvider('second', 'second-failed', 40),
+    ]);
+    const resp = await runtime.read({ ref: { kind: 'name', name: 'x' } });
+
+    expect(resp.ok).toBe(false);
+    if (resp.ok) return;
+    expect(resp.error.code).toBe('aggregate_error');
+    if (resp.error.code !== 'aggregate_error') return;
+    expect(resp.error.failures.map((f) => f.provider)).toEqual(['first', 'second']);
+  });
+
+  it('three failing providers → aggregate_error preserving every code in precedence order', async () => {
+    const runtime = new InProcessSkillsRuntime([
+      makeThrowingProvider('p0', 'e0', 10),
+      makeThrowingProvider('p1', 'e1', 30),
+      makeThrowingProvider('p2', 'e2', 0),
+    ]);
+    const resp = await runtime.read({ ref: { kind: 'name', name: 'x' } });
+
+    expect(resp.ok).toBe(false);
+    if (resp.ok) return;
+    expect(resp.error.code).toBe('aggregate_error');
+    if (resp.error.code !== 'aggregate_error') return;
+    expect(resp.error.failures.map((f) => f.provider)).toEqual(['p0', 'p1', 'p2']);
+    expect(resp.error.failures.every((f) => f.error.code === 'provider_error')).toBe(true);
+  });
+
+  it('every contributing provider cleanly returns zero candidates → not_found (no throws)', async () => {
+    const runtime = new InProcessSkillsRuntime([
+      makeEmptyProvider('e0', 0),
+      makeEmptyProvider('e1', 15),
+    ]);
+    const resp = await runtime.read({ ref: { kind: 'name', name: 'x' } });
+
+    expect(resp.ok).toBe(false);
+    if (resp.ok) return;
+    expect(resp.error.code).toBe('not_found');
+    if (resp.error.code === 'not_found') {
+      expect(resp.error.ref).toEqual({ kind: 'name', name: 'x' });
+    }
+  });
+
+  it('a failing provider beside a SUCCEEDING provider never collapses to an error (single resolved candidate)', async () => {
+    // One provider throws; another resolves the name to a single candidate.
+    const resolving = makeProvider({ id: 'good', skills: [{ name: 'x', fqid: 'good:x', body: 'B' }] });
+    const runtime = new InProcessSkillsRuntime([makeThrowingProvider('bad', 'boom', 0), resolving]);
+    const resp = await runtime.read({ ref: { kind: 'name', name: 'x' } });
+
+    expect(resp.ok).toBe(true);
+    if (!resp.ok) return;
+    expect(resp.data.descriptor.fqid).toBe('good:x');
+  });
+});

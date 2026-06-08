@@ -27,6 +27,7 @@
 // =============================================================================
 
 import { ParamCodec } from '../../../runtime/transport/param-codec.js';
+import { MAX_WIRE_RESPONSE_BYTES } from '../../../runtime/transport/param-codec.js';
 import { InProcessSkillsRuntime } from '../../../runtime/in-process-runtime.js';
 import { SkillsCapabilities } from '../../../runtime/capabilities.js';
 import type {
@@ -326,5 +327,157 @@ describe('ParamCodec.decode — valid input passes through (Req 10.4 happy path)
     expect(calls.list).toBe(1);
     expect(calls.resolve).toBe(0);
     expect(calls.read).toBe(0);
+  });
+});
+
+// =============================================================================
+// 4) decodeResponse — structural validation at the untrusted-worker boundary
+//    (T19; Req 6.3, 2.6).
+//
+// The wire response crosses the bus from an out-of-process / potentially remote
+// worker, so it is NOT trusted structurally. decodeResponse must:
+//   - pass a well-formed SkillResponse (ok:true and ok:false) through UNCHANGED;
+//   - map a malformed / oversized / reserved-violating response to a RETURNED
+//     typed provider_error carrying the bus:<pool> transport-origin marker, never
+//     passing the malformed object to the caller and never throwing.
+//
+// Validates: Requirements 6.3, 2.6
+// =============================================================================
+
+const CAP = SkillsCapabilities.read;
+const ORIGIN = 'bus:test-pool';
+
+/** A structurally valid ok:true wire response (data + minimal provenance core). */
+function wellFormedOk(): SkillResponse<unknown> {
+  return {
+    ok: true,
+    data: { descriptor: { fqid: 'bundled:alpha', name: 'alpha', provider: 'bundled', source: 's' }, body: '# Alpha' },
+    provenance: { fqid: 'bundled:alpha', provider: 'bundled', source: 's' },
+  };
+}
+
+/** A structurally valid ok:false wire response (genuine not_found from the worker). */
+function wellFormedErr(): SkillResponse<unknown> {
+  return { ok: false, error: { code: 'not_found', ref: { kind: 'name', name: 'ghost' } } };
+}
+
+describe('ParamCodec.decodeResponse — well-formed responses pass through unchanged (Req 6.3)', () => {
+  it('ok:true with data + minimal provenance is returned unchanged', () => {
+    const raw = wellFormedOk();
+    const result = ParamCodec.decodeResponse(CAP, raw, ORIGIN);
+    expect(result).toBe(raw); // identity preserved — no copy, no mutation
+    expect(result.ok).toBe(true);
+  });
+
+  it('ok:false with a known error code is returned unchanged (not replaced)', () => {
+    const raw = wellFormedErr();
+    const result = ParamCodec.decodeResponse(CAP, raw, ORIGIN);
+    expect(result).toBe(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('not_found');
+  });
+
+  it('ok:true provenance MAY carry open index-signature fields (resolvedFrom, ...)', () => {
+    const raw = {
+      ok: true as const,
+      data: [{ fqid: 'bundled:a', name: 'a', provider: 'bundled', source: 's' }],
+      provenance: {
+        fqid: '*',
+        provider: 'runtime',
+        source: 'aggregate:list',
+        aggregateDiagnostics: { sources: [], conflicts: [] },
+      },
+    };
+    const result = ParamCodec.decodeResponse(CAP, raw, ORIGIN);
+    expect(result).toBe(raw);
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('ParamCodec.decodeResponse — malformed responses become a typed provider_error (Req 2.6)', () => {
+  const expectRejected = (raw: unknown): void => {
+    const result = ParamCodec.decodeResponse(CAP, raw, ORIGIN);
+    // The malformed object is NEVER passed through...
+    expect(result).not.toBe(raw);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // ...it is a typed provider_error carrying the bus:<pool> transport-origin marker.
+    expect(result.error.code).toBe('provider_error');
+    if (result.error.code === 'provider_error') {
+      expect(result.error.provider).toBe(ORIGIN);
+      expect(result.error.message.length).toBeGreaterThan(0);
+    }
+  };
+
+  it('missing discriminant (no `ok`) → provider_error', () => {
+    expectRejected({ data: {}, provenance: { fqid: 'f', provider: 'p', source: 's' } });
+  });
+
+  it('ok:true without `data` → provider_error', () => {
+    expectRejected({ ok: true, provenance: { fqid: 'f', provider: 'p', source: 's' } });
+  });
+
+  it('ok:true without `provenance` → provider_error', () => {
+    expectRejected({ ok: true, data: { body: 'x' } });
+  });
+
+  it('ok:true with an incomplete provenance core (missing `source`) → provider_error', () => {
+    expectRejected({ ok: true, data: { body: 'x' }, provenance: { fqid: 'f', provider: 'p' } });
+  });
+
+  it('ok:false with an unknown error code → provider_error', () => {
+    expectRejected({ ok: false, error: { code: 'totally-made-up' } });
+  });
+
+  it('ok:false with a non-object error → provider_error', () => {
+    expectRejected({ ok: false, error: 'boom' });
+  });
+
+  it('a non-object wire value (string / number / null) → provider_error', () => {
+    expectRejected('not-a-response');
+    expectRejected(42);
+    expectRejected(null);
+  });
+
+  it('reserved-field violation: an injected extra top-level key → provider_error', () => {
+    expectRejected({
+      ok: true,
+      data: { body: 'x' },
+      provenance: { fqid: 'f', provider: 'p', source: 's' },
+      injected: 'surprise',
+    });
+  });
+
+  it('reserved-field violation: a prototype-pollution own key (__proto__) → provider_error', () => {
+    // JSON.parse materializes "__proto__" as an OWN enumerable key, which the strict
+    // envelope rejects — the malformed object is never handed to the caller.
+    const raw = JSON.parse('{"ok":false,"error":{"code":"not_found"},"__proto__":{"polluted":true}}');
+    expectRejected(raw);
+  });
+
+  it('oversized payload (over the max wire bound) → provider_error, body not passed through', () => {
+    const huge = 'x'.repeat(MAX_WIRE_RESPONSE_BYTES + 16);
+    const raw = {
+      ok: true,
+      data: { body: huge },
+      provenance: { fqid: 'f', provider: 'p', source: 's' },
+    };
+    const result = ParamCodec.decodeResponse(CAP, raw, ORIGIN);
+    expect(result).not.toBe(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.code === 'provider_error') {
+      expect(result.error.provider).toBe(ORIGIN);
+      expect(result.error.message).toMatch(/max payload/i);
+    }
+  });
+});
+
+describe('ParamCodec.decodeResponse — transport-origin marker (Req 6.3)', () => {
+  it('defaults the origin marker to `bus` when none is supplied', () => {
+    const result = ParamCodec.decodeResponse(CAP, { ok: 'nope' });
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.code === 'provider_error') {
+      expect(result.error.provider).toBe('bus');
+    }
   });
 });

@@ -13,12 +13,19 @@
 //   leaving the registry unchanged.
 //   **Validates: Requirements 1.2, 1.6, 9.6**
 //
-// Property 4 (design.md §"Correctness Properties" — No silent ambiguity):
-//   When a ref resolves to >=2 DISTINCT FQIDs, the result is `ambiguous` with
-//   all candidates; the runtime never silently selects the first match. When
-//   distinct providers map the same name to the SAME FQID, dedupe collapses the
-//   count and resolution succeeds (one candidate) — ambiguity requires >=2
-//   DISTINCT FQIDs.
+// Property 4 (design.md §5 — Collision → ambiguous; no silent first-match):
+//   Single-skill resolution routes through the SAME conflict-aware dedupe that
+//   `list`/`search` use, so resolution polarity is a pure function of the number
+//   of CONTENT-DISTINCT descriptors among the resolved candidates:
+//     0   -> not_found
+//     1   -> ok (genuine duplicates — same FQID AND identical content — collapse
+//            to one; resolution succeeds without a silent pick)
+//     >=2 -> ambiguous, carrying EVERY content-distinct descriptor, never a
+//            silent first-match.
+//   Critically (the corrected Req 5.6 semantics): two DISTINCT descriptors that
+//   COLLIDE on one FQID (same `fqid`, differing content) count as >=2 and are
+//   `ambiguous` — they are NOT silently collapsed. Distinct FQIDs likewise yield
+//   `ambiguous`.
 //   **Validates: Requirements 1.4, 2.7, 5.6**
 //
 // These tests drive the REAL InProcessSkillsRuntime through the registry ->
@@ -192,75 +199,166 @@ describe('Property 3: Open-world resolution (Req 1.2, 1.6, 9.6)', () => {
 });
 
 // =============================================================================
-// Property 4 — No silent ambiguity (Req 1.4, 2.7, 5.6)
+// Property 4 — Collision → ambiguous; no silent first-match (Req 1.4, 2.7, 5.6)
 //
-// Generate, for a single target name, a set of providers that each emit ONE FQID
-// drawn from a small pool (so collisions are common). The runtime dedupes by
-// FQID, so the result polarity is a pure function of the DISTINCT FQID count:
-//   0  -> not_found
-//   1  -> ok (dedupe collapsed any same-FQID duplicates — NOT ambiguous)
-//   >=2 -> ambiguous, candidates == the full set of distinct FQIDs
-// This precisely encodes "ambiguity requires >=2 DISTINCT FQIDs" and "never a
-// silent first-match".
+// A single federated registry provider emits, for ONE target name, an arbitrary
+// list of descriptors. Each descriptor draws its `fqid` and a content-bearing
+// `layer` from small pools, while `name`/`provider`/`source` are FIXED — so two
+// descriptors are CONTENT-IDENTICAL iff their (fqid, layer) pair is equal. This
+// lets the generator freely produce all three cases the corrected Req 5.6
+// semantics distinguish:
+//   - same FQID + same layer  -> identical descriptors (genuine duplicate)
+//   - same FQID + diff layer   -> DISTINCT descriptors colliding on one FQID
+//   - different FQID           -> DISTINCT descriptors
+//
+// Resolution polarity is then a pure function of the number of CONTENT-DISTINCT
+// descriptors (signature = all descriptor fields):
+//   0   -> not_found
+//   1   -> ok (duplicates collapsed; resolved fqid is that single descriptor's)
+//   >=2 -> ambiguous, candidates == EVERY content-distinct descriptor, never a
+//          silent first-match. A same-FQID/differing-content collision therefore
+//          surfaces BOTH clashing descriptors instead of being silently dropped.
 // =============================================================================
 
-describe('Property 4: No silent ambiguity (Req 1.4, 2.7, 5.6)', () => {
+describe('Property 4: Collision → ambiguous; no silent first-match (Req 1.4, 2.7, 5.6)', () => {
   const TARGET = 'ambiguity-target';
+  const REG_ID = 'registry';
 
-  // A small FQID pool so distinct providers frequently share an FQID (dedupe)
-  // and frequently differ (ambiguity).
-  const fqidArb = fc.constantFrom('alpha:x', 'beta:x', 'gamma:x', 'delta:x');
+  /** A descriptor record the registry provider owns for TARGET. */
+  interface RegRecord {
+    fqid: string;
+    /** Content-bearing field; fixed name/provider/source means (fqid, layer) = identity. */
+    layer: number;
+  }
+
+  const recordToDescriptor = (r: RegRecord): SkillDescriptor => ({
+    fqid: r.fqid,
+    name: TARGET,
+    provider: REG_ID,
+    source: `fake://${REG_ID}/${TARGET}`,
+    layer: r.layer,
+  });
+
+  /**
+   * A single federated registry provider that resolves TARGET to an explicit set
+   * of descriptor records — modelling a registry that returns several records for
+   * one name (the realistic source of a same-FQID collision). Driving the REAL
+   * runtime over this provider exercises `resolveOne`'s conflict-aware dedupe.
+   */
+  function makeRegistryProvider(records: ReadonlyArray<RegRecord>): SkillProvider {
+    const toResolved = (r: RegRecord): ResolvedSkill => {
+      const descriptor = recordToDescriptor(r);
+      return {
+        descriptor,
+        providerId: REG_ID,
+        providerLocalRef: '__private__',
+        provenanceSeed: { source: descriptor.source },
+      };
+    };
+    return {
+      id: REG_ID,
+      capabilities: { read: true, list: true, search: false, references: false },
+      async resolve(ref: SkillRef): Promise<ResolvedSkill[]> {
+        if (ref.kind !== 'name' || ref.name !== TARGET) return [];
+        if (ref.provider && ref.provider !== REG_ID) return [];
+        return records.map(toResolved);
+      },
+      async read(resolved: ResolvedSkill): Promise<SkillContent> {
+        return { descriptor: resolved.descriptor, body: `body:${resolved.descriptor.fqid}` };
+      },
+      async list(): Promise<ResolvedSkill[]> {
+        return records.map(toResolved);
+      },
+    };
+  }
+
+  /** Canonical content-identity key for a record (mirrors the runtime's signature). */
+  const identityKey = (r: RegRecord): string => `${r.fqid}|${r.layer}`;
+
+  // Small pools so collisions (same fqid) and content clashes (diff layer) are common.
+  const recordArb = fc.record({
+    fqid: fc.constantFrom('alpha:x', 'beta:x', 'gamma:x'),
+    layer: fc.constantFrom(1, 2),
+  });
 
   it('precondition: the target name is open-world (absent from SkillName)', () => {
     expect(PUBLISHED.has(TARGET)).toBe(false);
   });
 
-  it('returns ambiguous with ALL distinct candidates iff >=2 distinct FQIDs resolve', async () => {
+  it('polarity follows the content-distinct descriptor count; collisions are never silently picked', async () => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.array(fqidArb, { minLength: 0, maxLength: 6 }),
-        async (emittedFqids) => {
-          // Each emitted FQID belongs to a DISTINCT provider, so two providers
-          // can map the same name to the same FQID (forcing dedupe collapse).
-          const providers = emittedFqids.map((fqid, i) =>
-            makeProvider(`prov${i}`, [{ fqid, name: TARGET }]),
-          );
+      fc.asyncProperty(fc.array(recordArb, { minLength: 0, maxLength: 6 }), async (records) => {
+        const provider = makeRegistryProvider(records);
+        const { resp } = await readByName([provider], TARGET);
 
-          const distinct = new Set(emittedFqids);
-          const { resp } = await readByName(providers, TARGET);
+        // The independent oracle: distinct descriptors keyed by full content identity.
+        const distinctKeys = new Set(records.map(identityKey));
 
-          if (distinct.size === 0) {
-            expect(resp.ok).toBe(false);
-            if (!resp.ok) expect(resp.error.code).toBe('not_found');
-            return;
-          }
-
-          if (distinct.size === 1) {
-            // Same FQID across providers collapses to ONE candidate — never
-            // ambiguous, and resolved without a silent pick of "the first".
-            expect(resp.ok).toBe(true);
-            if (resp.ok) {
-              expect(resp.data.descriptor.fqid).toBe([...distinct][0]);
-            }
-            return;
-          }
-
-          // >=2 distinct FQIDs: must be `ambiguous` carrying EVERY distinct
-          // candidate, never a silent first-match.
+        if (distinctKeys.size === 0) {
           expect(resp.ok).toBe(false);
-          if (resp.ok) return;
-          expect(resp.error.code).toBe('ambiguous');
-          if (resp.error.code !== 'ambiguous') return;
+          if (!resp.ok) expect(resp.error.code).toBe('not_found');
+          return;
+        }
 
-          const candidateFqids = new Set(resp.error.candidates.map((c) => c.fqid));
-          // All distinct FQIDs are present...
-          expect(candidateFqids).toEqual(distinct);
-          // ...and there is exactly one candidate per distinct FQID (deduped).
-          expect(resp.error.candidates.length).toBe(distinct.size);
-        },
-      ),
+        if (distinctKeys.size === 1) {
+          // Genuine duplicates (same FQID AND identical content) collapse to one —
+          // resolution succeeds and is NOT a silent pick among differing descriptors.
+          expect(resp.ok).toBe(true);
+          if (resp.ok) {
+            expect(resp.data.descriptor.fqid).toBe(records[0].fqid);
+          }
+          return;
+        }
+
+        // >=2 content-distinct descriptors: `ambiguous`, carrying EVERY distinct
+        // descriptor (whether they differ by FQID or collide on one FQID), never a
+        // silent first-match.
+        expect(resp.ok).toBe(false);
+        if (resp.ok) return;
+        expect(resp.error.code).toBe('ambiguous');
+        if (resp.error.code !== 'ambiguous') return;
+
+        const candidateKeys = new Set(
+          resp.error.candidates.map((c) => `${c.fqid}|${c.layer ?? ''}`),
+        );
+        expect(candidateKeys).toEqual(distinctKeys);
+        expect(resp.error.candidates.length).toBe(distinctKeys.size);
+      }),
       { numRuns: 400 },
     );
+  });
+
+  it('same FQID + DIFFERING content → ambiguous, surfacing BOTH clashing descriptors (Req 5.6)', async () => {
+    // Two descriptors collide on one FQID but differ in content (layer). The
+    // corrected Req 5.6 semantics: this is a conflict, NOT a silent collapse.
+    const provider = makeRegistryProvider([
+      { fqid: 'shared:x', layer: 1 },
+      { fqid: 'shared:x', layer: 2 },
+    ]);
+    const { resp } = await readByName([provider], TARGET);
+
+    expect(resp.ok).toBe(false);
+    if (resp.ok) return;
+    expect(resp.error.code).toBe('ambiguous');
+    if (resp.error.code !== 'ambiguous') return;
+    // Both clashing descriptors are reported (same fqid, different layer).
+    expect(resp.error.candidates).toHaveLength(2);
+    expect(new Set(resp.error.candidates.map((c) => c.fqid))).toEqual(new Set(['shared:x']));
+    expect(new Set(resp.error.candidates.map((c) => c.layer))).toEqual(new Set([1, 2]));
+  });
+
+  it('same FQID + IDENTICAL content → collapses to one, resolves without a silent pick', async () => {
+    // Two byte-for-byte identical descriptors are genuine duplicates: collapse to
+    // one and resolve cleanly (not ambiguous).
+    const provider = makeRegistryProvider([
+      { fqid: 'dup:x', layer: 1 },
+      { fqid: 'dup:x', layer: 1 },
+    ]);
+    const { resp } = await readByName([provider], TARGET);
+
+    expect(resp.ok).toBe(true);
+    if (!resp.ok) return;
+    expect(resp.data.descriptor.fqid).toBe('dup:x');
   });
 
   it('never silently selects the first match (explicit two-distinct-FQID example)', async () => {
