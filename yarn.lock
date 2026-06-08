@@ -2821,10 +2821,10 @@
   dependencies:
     tslib "^2.6.2"
 
-"@stdiobus/mcp-agentic@1.1.2":
-  version "1.1.2"
-  resolved "https://registry.yarnpkg.com/@stdiobus/mcp-agentic/-/mcp-agentic-1.1.2.tgz#553f9b2f6d3c9520ace3c56e9eefba1f22f50f6f"
-  integrity sha512-SclJJYbXUhLhTPwJPCJkjDD19nUFW1gM7XQa4RKg9dhTmkJQ2bHx5oCwAQAl90AEJPrxuinlefbMgYLiNT8KCw==
+"@stdiobus/mcp-agentic@1.1.5":
+  version "1.1.5"
+  resolved "https://registry.yarnpkg.com/@stdiobus/mcp-agentic/-/mcp-agentic-1.1.5.tgz#d5f6c400f8394c1c77822c7fdbdc053bcedc064f"
+  integrity sha512-9gBiCq+6GgM9z1fi2er9ANwlGJmqqJDI8tCwPCyhd2Vvlm1Ttzf40dwN776ebUtw0pMXI7Q1F4PTEgV7n3WHmw==
   dependencies:
     "@modelcontextprotocol/sdk" "^1.29.0"
     "@stdiobus/node" "^2.0.0"

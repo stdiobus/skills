@@ -97,7 +97,7 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
     );
   });
 
-  it('rejects unknown skill names', () => {
+  it('treats unknown skill names as non-fatal custom/uncategorized fallback', () => {
     const unknownName = fc.array(
       fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz'.split('')),
       { minLength: 5, maxLength: 30 },
@@ -107,8 +107,15 @@ describe('validateLayerAssignment() — Property 8: Layer assignment correctness
     fc.assert(
       fc.property(unknownName, (skillName) => {
         const result = validateLayerAssignment(skillName, 1, 'Concepts');
-        expect(result.valid).toBe(false);
-        expect(result.errors.some((e) => e.includes('Unknown skill name'))).toBe(true);
+        // A resolved-but-uncategorized name is no longer a fatal error (Req 8.4–8.6):
+        // it is valid with a non-fatal warning indicating the custom/uncategorized fallback.
+        expect(result.valid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+        expect(
+          result.warnings.some((w) => /custom\/uncategorized/i.test(w)),
+        ).toBe(true);
+        // The old fatal 'Unknown skill name' error must NOT be emitted anymore.
+        expect(result.errors.some((e) => e.includes('Unknown skill name'))).toBe(false);
       }),
       { numRuns: 15 },
     );

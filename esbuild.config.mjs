@@ -14,7 +14,11 @@ import { builtinModules } from 'node:module';
 
 const nodeBuiltins = builtinModules.flatMap(m => [m, `node:${m}`]);
 
-const runtimeExternals = [];
+// Native addons MUST stay external — esbuild cannot inline a `.node` binary, and
+// @stdiobus/node resolves its prebuilt binary relative to its own package dir
+// (`__dirname/../../prebuilds`). Bundling it would break that path resolution and crash
+// the addon load at startup. It is a runtime `dependency`, resolved from node_modules.
+const runtimeExternals = ['@stdiobus/node'];
 
 const external = [...nodeBuiltins, ...runtimeExternals];
 
