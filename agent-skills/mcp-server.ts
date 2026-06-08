@@ -47,6 +47,32 @@
  *     runtime would otherwise fall back to list+substring and change ranking).
  *   - Provenance is NOT surfaced at the MCP response level (Req 9.7); the renderers emit
  *     only the typed `data`, never the provenance envelope.
+ *
+ * ─── Staged provenance exposure (Migration Step 9 — design §1, §"Migration / Rollout
+ *     Sequence" step 9, Req 9.7, 9.9) ───────────────────────────────────────────────
+ *
+ * Provenance exposure at the MCP response level is an OPT-IN, DECLARED, VERSIONED staged
+ * change — never an implicit mutation of the existing shape (Req 9.9). It is governed by a
+ * single declared flag {@link AdapterRenderOptions.exposeProvenance}, sourced for the
+ * standalone executable from the {@link EXPOSE_PROVENANCE_ENV} environment variable and
+ * DEFAULTING OFF (Req 9.7):
+ *
+ *   - OFF (default): the body/reference renderers emit output BYTE-IDENTICAL to the
+ *     compatibility phase (raw body for `read_skill`/`read_reference`; a JSON string array
+ *     for `list_references`). No provenance leaks into MCP output.
+ *   - ON (explicit opt-in): the runtime-backed body/reference tools emit the declared
+ *     `provenance.v1` envelope ({@link PROVENANCE_SHAPE_VERSION}) that ADDS provenance
+ *     alongside the existing content:
+ *       · `read_skill` / `read_reference` → `{ version, body, provenance }`
+ *       · `list_references`              → `{ version, references, provenance }`
+ *     where `provenance` is the declared minimum identity set `{ fqid, provider, source }`
+ *     plus the optional `resolvedFrom`.
+ *
+ * `list_skills` (serves the manifest registry document) and `search_skills` (serves the
+ * keyword index) are UNAFFECTED by the flag: neither is backed by a single runtime
+ * `SkillResponse` provenance envelope, so there is nothing to stage for them. The staged
+ * shape applies only to the runtime-backed tools `read_skill`, `list_references`, and
+ * `read_reference`.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -54,15 +80,22 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { createFileResolver } from './lib/file-resolver.js';
 import { buildSearchIndex } from './lib/search-index.js';
+import {
+  COMPAT_RENDER_OPTIONS,
+  EXPOSE_PROVENANCE_ENV,
+  PROVENANCE_SHAPE_VERSION,
+  renderListReferences,
+  renderReadReference,
+  renderReadSkill,
+  resolveExposeProvenance,
+  type AdapterRenderOptions,
+  type ToolResult,
+} from './lib/tool-render.js';
 import { handleListSkills } from './tools/list-skills.js';
 import { handleSearchSkills } from './tools/search-skills.js';
 import { FilesystemSkillProvider } from './runtime/providers/filesystem-provider.js';
 import { SkillProviderRegistry, createRuntimeFromRegistry } from './runtime/registry.js';
 import { bundledTrustPolicy } from './runtime/trust.js';
-import type { SkillRef, SkillRuntimeError } from './runtime/contract.js';
-
-/** MCP tool result shape (unchanged from the pre-migration contract). */
-type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
 /**
  * Open-world skill-name schema (Req 1.6, 9.1, 9.6).
@@ -72,56 +105,6 @@ type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: bo
  * tool's input parameter key set is unchanged — only the validator is relaxed.
  */
 const skillParam = z.string().min(1);
-
-// ---------------------------------------------------------------------------
-// SkillResponse → MCP output rendering (provenance stripped per Req 9.7)
-// ---------------------------------------------------------------------------
-
-/** Human-facing label for a {@link SkillRef} in a rendered error. */
-function refLabel(ref: SkillRef): string {
-  switch (ref.kind) {
-    case 'name':
-      return `"${ref.name}"`;
-    case 'fqid':
-      return `"${ref.fqid}"`;
-    case 'descriptor':
-      return `"${ref.descriptor.name}"`;
-  }
-}
-
-/** Render a typed {@link SkillRuntimeError} into a single diagnostic line. */
-function describeError(error: SkillRuntimeError): string {
-  switch (error.code) {
-    case 'not_found':
-      return `skill not found: ${refLabel(error.ref)}`;
-    case 'ambiguous':
-      return `ambiguous skill ${refLabel(error.ref)} resolves to ${error.candidates.length} candidates`;
-    case 'unsupported':
-      return error.provider
-        ? `capability "${error.capability}" is not supported by provider "${error.provider}"`
-        : `capability "${error.capability}" is not supported`;
-    case 'provider_error':
-      return error.message;
-    case 'bad_request':
-      return error.issues.join('; ');
-    case 'out_of_bounds':
-      return error.detail;
-    case 'content_too_large':
-      return `content exceeds the maximum size of ${error.limitBytes} bytes`;
-    case 'isolation_failed':
-      return error.reason;
-    case 'aggregate_error':
-      return error.failures.map((f) => `${f.provider}: ${describeError(f.error)}`).join('; ');
-  }
-}
-
-/** Render a typed runtime error as an MCP tool error (`isError: true`). */
-function renderError(tool: string, error: SkillRuntimeError): ToolResult {
-  return {
-    content: [{ type: 'text', text: `${tool}: ${describeError(error)}` }],
-    isError: true,
-  };
-}
 
 /**
  * Emit the Req 9.6 non-fatal open-world warning (diagnostics channel only).
@@ -167,6 +150,17 @@ async function main(): Promise<void> {
   // emit the non-fatal open-world warning — never as a resolution/allow-list gate.
   const publishedSkills: ReadonlySet<string> = new Set(manifest.skills.map((s) => s.name));
 
+  // Staged provenance exposure (Task 11.1, Req 9.7/9.9): DEFAULT OFF. Sourced from the
+  // declared EXPOSE_PROVENANCE_ENV for the standalone executable. When off, the renderers
+  // produce output byte-identical to the compatibility phase; when on, they produce the
+  // declared `provenance.v1` staged shape. This is the single, declared opt-in point.
+  const renderOpts: AdapterRenderOptions = { exposeProvenance: resolveExposeProvenance() };
+  if (renderOpts.exposeProvenance) {
+    process.stderr.write(
+      `staged provenance exposure ENABLED (${PROVENANCE_SHAPE_VERSION}) via ${EXPOSE_PROVENANCE_ENV}\n`,
+    );
+  }
+
   // Pre-load all SKILL.md contents for the search index (unchanged behavior).
   const skillContents = new Map<string, string>();
   for (const skill of manifest.skills) {
@@ -202,10 +196,7 @@ async function main(): Promise<void> {
     async (args): Promise<ToolResult> => {
       warnIfUnpublished('read_skill', args.skill, publishedSkills);
       const resp = await runtime.read({ ref: { kind: 'name', name: args.skill } });
-      if (resp.ok) {
-        return { content: [{ type: 'text', text: resp.data.body }] };
-      }
-      return renderError('read_skill', resp.error);
+      return renderReadSkill(resp, renderOpts);
     },
   );
 
@@ -219,11 +210,7 @@ async function main(): Promise<void> {
     async (args): Promise<ToolResult> => {
       warnIfUnpublished('list_references', args.skill, publishedSkills);
       const resp = await runtime.getReferences({ ref: { kind: 'name', name: args.skill } });
-      if (resp.ok) {
-        const paths = resp.data.map((d) => d.path);
-        return { content: [{ type: 'text', text: JSON.stringify(paths) }] };
-      }
-      return renderError('list_references', resp.error);
+      return renderListReferences(resp, renderOpts);
     },
   );
 
@@ -256,10 +243,7 @@ async function main(): Promise<void> {
         ref: { kind: 'name', name: args.skill },
         reference: args.reference,
       });
-      if (resp.ok) {
-        return { content: [{ type: 'text', text: resp.data.body }] };
-      }
-      return renderError('read_reference', resp.error);
+      return renderReadReference(resp, renderOpts);
     },
   );
 
