@@ -3,7 +3,7 @@
 </h1>
 
 <p align="center">
-  Structured, validated, machine-readable skills for AI agents — delivered over <a href="https://modelcontextprotocol.io">Model Context Protocol</a> via <a href="https://github.com/stdiobus">stdio Bus</a>
+  Structured, validated <strong>skills</strong> that teach AI agents to write correct code — served over <a href="https://modelcontextprotocol.io">MCP</a>, and extensible with new skill sources <strong>at runtime</strong>
 </p>
 
 <p align="center">
@@ -12,117 +12,165 @@
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/protocol-MCP-8A2BE2?style=for-the-badge" alt="MCP" /></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=for-the-badge&logo=nodedotjs" alt="Node" /></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/typescript-strict-blue?style=for-the-badge&logo=typescript" alt="TypeScript" /></a>
-  <a href="https://esbuild.github.io"><img src="https://img.shields.io/badge/build-esbuild-yellow?style=for-the-badge&logo=esbuild" alt="Build" /></a>
 </p>
 <p align="center">
-  <a href="#available-skill-collection-runtime-web"><img src="https://img.shields.io/badge/skills-17-4a90e2?style=for-the-badge" alt="Skills" /></a>
-  <a href="#the-5-layer-skill-hierarchy"><img src="https://img.shields.io/badge/layers-5-50c878?style=for-the-badge" alt="Layers" /></a>
-  <a href="#mcp-tool-interface"><img src="https://img.shields.io/badge/MCP%20tools-5-8A2BE2?style=for-the-badge" alt="MCP Tools" /></a>
-  <a href="https://aws.amazon.com/lambda"><img src="https://img.shields.io/badge/AWS-Lambda-FF9900?style=for-the-badge&logo=awslambda&logoColor=white" alt="AWS Lambda" /></a>
-  <a href="https://aws.amazon.com/cdk"><img src="https://img.shields.io/badge/AWS-CDK%202.x-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS CDK" /></a>
+  <a href="#provider-boundary"><img src="https://img.shields.io/badge/provider%20boundary-skills.add.v1-e67e22?style=for-the-badge" alt="Provider Boundary" /></a>
+  <a href="#system-shape"><img src="https://img.shields.io/badge/transports-2-50c878?style=for-the-badge" alt="Transports" /></a>
+  <a href="#quick-start"><img src="https://img.shields.io/badge/MCP%20tools-5-8A2BE2?style=for-the-badge" alt="MCP Tools" /></a>
+  <a href="#bundled-provider-catalog"><img src="https://img.shields.io/badge/bundled%20skills-17-4a90e2?style=for-the-badge" alt="Skills" /></a>
   <a href="https://jestjs.io"><img src="https://img.shields.io/badge/tested-jest%20%2B%20fast--check-C21325?style=for-the-badge&logo=jest&logoColor=white" alt="Jest" /></a>
-  <a href="#test-strategy"><img src="https://img.shields.io/badge/coverage-96%25-brightgreen?style=for-the-badge" alt="Coverage" /></a>
+  <a href="#development"><img src="https://img.shields.io/badge/coverage-%E2%89%A580%25-brightgreen?style=for-the-badge" alt="Coverage" /></a>
   <a href="https://github.com/stdiobus/skills/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=for-the-badge&logo=opensourceinitiative" alt="License" /></a>
-  <a href="https://github.com/stdiobus/skills"><img src="https://img.shields.io/badge/status-stable-brightgreen?style=for-the-badge" alt="Stable" /></a>
 </p>
 
 <p align="center">
   <a href="#what-is-this">What Is This</a> •
-  <a href="#mcp-tool-interface">MCP Tools</a> •
+  <a href="#what-you-get">What You Get</a> •
+  <a href="#system-shape">System Shape</a> •
+  <a href="#provider-boundary">Provider Boundary</a> •
+  <a href="#safety-model">Safety</a> •
   <a href="#quick-start">Quick Start</a> •
-  <a href="#available-skill-collection-runtime-web">Runtime Web Skills</a> •
-  <a href="#available-skill-collection-stdio-bus-sdks">stdio Bus SDK Skills</a> •
-  <a href="#for-ai-agents">For AI Agents</a> •
-  <a href="#development">Development</a> •
-  <a href="#license">License</a>
+  <a href="#runtime-admission">Runtime Admission</a> •
+  <a href="#bundled-provider-catalog">Bundled Skills</a> •
+  <a href="#development">Development</a>
 </p>
 
 ---
 
 ## What Is This
 
-`@stdiobus/skills` is an **MCP server** that exposes structured, validated agent skills over stdio transport. It is part of the [stdio Bus](https://github.com/stdiobus) ecosystem — a runtime for multi-agent systems built on native stdio communication.
+**A skill** is a structured, machine-readable document that teaches an AI coding agent how to do **one specific thing correctly** — for example, *"how to write an authenticated HTTP endpoint in this framework."* Unlike documentation written for humans, every skill has a fixed schema, compilable example templates, an explicit *"what is NOT supported"* list, and a structured error catalog. The agent reads the skill and produces correct, type-checked code instead of guessing.
 
-The package ships as both an **executable MCP server** (`npx @stdiobus/skills`) and an **npm library** with programmatic access to skill content and metadata. Agents connect via JSON-RPC 2.0 / NDJSON over stdio, discover available skills through five MCP tools, and consume deterministic, machine-parseable knowledge to generate correct code.
+`@stdiobus/skills` does two things with skills:
 
-This is not documentation for humans. It is a **machine-readable knowledge base** designed for LLM-based agents operating within coding assistants, agentic development environments, and multi-agent orchestration systems.
+1. **Serves them to agents.** It runs a small server that any MCP-compatible AI agent (Cursor, Claude Desktop, Kiro, Windsurf, …) connects to over stdio. The agent asks *"what skills exist?"*, *"read skill X"*, *"search skills"* — and gets deterministic, validated answers. **17 skills ship in the box.**
+2. **Lets the skill set grow at runtime.** Skills used to be fixed at install time. Now a host can point the runtime at an **external skill source** (for example, an HTTPS URL); the runtime fetches it, checks that it is safe, and adds it to the **same pool** the agent reads from. An agent's skill set is no longer frozen.
 
-### First of Its Kind
+### How it works, in one minute
 
-There is no established standard for delivering structured, validated knowledge to AI agents over MCP. This project introduces the concept of **agentic skills** — machine-parseable, CI-validated skill documents served as MCP tools over stdio. The architecture, skill schema, validation pipeline, and delivery infrastructure are production-ready and designed to support multiple independent skill collections.
+1. An AI agent connects to the server over stdio (JSON-RPC 2.0 / NDJSON).
+2. It calls `list_skills` → reads the skills it needs with `read_skill` → uses the templates to write correct code. By default that is the whole story: **read-only, 17 bundled skills, five tools.**
+3. *(Optional, opt-in)* A host enables admission and says *"add the skill source at this URL."* The runtime fetches the content over HTTPS, runs it through safety checks (size limit; treat content as data and never execute it; a namespace rule so an external source cannot impersonate the bundled skills), and registers it.
+4. From then on the new skill appears in `list_skills` / `read_skill` **alongside** the bundled ones — over the MCP server **and** over the stdio Bus, because both are the same engine underneath.
 
-The first skill collection — **Runtime Web** — ships with the package. It contains **12 skills across 5 layers** that teach agents how to generate correct, type-safe code for [`@worktif/runtime`](https://runtimeweb.com), an AWS Lambda serverless framework for TypeScript microservices.
+> The default `npx @stdiobus/skills` executable is **read-only**: it serves the 17 bundled skills through five tools and does **not** add external sources. Growing the set is an opt-in capability a host wires up explicitly — see [Runtime Admission](#runtime-admission).
 
-The second collection — **stdio Bus SDKs** — provides **3 skills** covering the C++, Node.js, and Rust SDKs for [stdio Bus](https://github.com/stdiobus) itself. These teach agents how to build applications that manage worker processes over JSON-RPC/NDJSON transport.
-
-New skill collections for other frameworks and domains can be added directly to the repository following the same schema.
-
-### Why Skills Instead of Docs
-
-Traditional documentation is written for humans: it assumes context, relies on narrative flow, and leaves room for interpretation. AI agents need something different:
-
-| Concern | Traditional Docs | Agent Skills |
-|---------|-----------------|--------------|
-| Structure | Free-form prose | YAML frontmatter + ordered sections with fixed schema |
-| Code examples | Illustrative snippets | Canonical templates that compile against real types |
-| Error handling | "See troubleshooting" | Deterministic error catalog with pattern → cause → resolution |
-| Scope boundaries | Implied | Explicit NOT SUPPORTED list with hard decision rules |
-| Validation | Manual review | CI pipeline: template compilation, type existence, cross-reference integrity |
-| Versioning | Changelog | Per-skill `frameworkVersionRange` with migration guides |
-| Anti-patterns | Occasional warnings | Structured ❌/✅ pairs in every skill |
-| Discoverability | Table of contents | 5-layer hierarchy with manifest, search, and cross-references |
-
-Skills give agents **deterministic, validated, machine-parseable knowledge** — reducing hallucination, preventing code that doesn't compile, and enforcing framework constraints before the consumer ever sees the output.
+In the precise terms used below, that makes this a **federated skills runtime** (one engine serving many skill providers over two transports) **with an open, governed provider boundary** (the safe path by which an external provider is admitted). The rest of this README defines those pieces.
 
 ---
 
-## MCP Tool Interface
+## What You Get
 
-The server exposes five tools over [Model Context Protocol](https://modelcontextprotocol.io) (JSON-RPC 2.0 / NDJSON via stdio transport):
+| Surface | Import / Command | What it does |
+|---------|------------------|--------------|
+| **Read-only MCP server** | `npx @stdiobus/skills` | The five stable MCP tools over stdio, serving the bundled skills provider. No admission. |
+| **Library** | `@stdiobus/skills` | `SkillName` enum + `Skill` / `SkillManifest` types and the skills manifest. |
+| **Runtime composition API** | `@stdiobus/skills/runtime` | The building blocks to compose an **admission-capable** runtime: the `SkillsRuntime`, provider registry/views, the bundled filesystem provider, the HTTPS provider blueprint, the `AdmissionController` + `skills.add.v1` handler, namespace governance, and the MCP server builder. |
+| **Same runtime over the bus** | `@stdiobus/skills/runtime` | The identical in-process runtime, driven by a stdio Bus worker — no new bus or worker is spawned for a provider. |
 
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `list_skills` | — | List all available skills with layers, metadata, and validation status |
-| `read_skill` | `skill` | Read the full SKILL.md content for a specific skill |
-| `list_references` | `skill` | List reference files (templates, error catalogs, guides) for a skill |
-| `read_reference` | `skill`, `reference` | Read a specific reference file |
-| `search_skills` | `query` | Keyword search across all skills (TF-IDF scoring with boost multipliers) |
+Two transport surfaces (**MCP stdio** and **stdio Bus**) sit behind **one** `SkillsRuntime` contract. The bundled provider works the same way over both; an admitted provider becomes reachable over both.
 
-The `skill` parameter is validated against the `SkillName` enum — only registered skill names are accepted. Invalid names return a structured error.
+---
+
+## System Shape
+
+The system has two layers behind a single contract. Higher layers build on lower ones; nothing below is rewritten to add what is above.
+
+- **Federated runtime** — one `SkillsRuntime` contract serving every operation (`read`, `list`, `search`, `getReferences`, `readReference`, plus the open `request` seam). Every result is a returned-never-thrown `SkillResponse` carrying provenance. Skill sources are **providers** behind a capability-optional contract; an ordered registry federates them (aggregate `list`/`search`, FQID dedupe, conflict surfacing, partial-failure resilience). The same contract runs **in-process** and over the **stdio Bus**.
+- **Provider boundary** — descriptor-based admission through `skills.add.v1`: a serializable `ProviderDescriptor` crosses, a typed `ProviderBlueprint` rebuilds the provider **in-process**, and a staged pipeline validates, acquires, governs, and registers it. New providers become visible to subsequent operations (add-only).
+
+```mermaid
+%%{init: {'theme':'dark', 'themeVariables':{'primaryColor':'#1a1a2e','primaryTextColor':'#fff','primaryBorderColor':'#4a90e2','lineColor':'#50c878','secondaryColor':'#16213e','tertiaryColor':'#0f3460'}}}%%
+flowchart TB
+  subgraph CLIENTS["Agents / Hosts"]
+    AG[AI Agent]
+  end
+
+  subgraph TRANSPORTS["Transport surfaces (one contract)"]
+    direction LR
+    MCP[MCP stdio server]
+    BUS[stdio Bus worker]
+  end
+
+  subgraph RUNTIME["SkillsRuntime (in-process)"]
+    direction TB
+    FED[Federation: dedupe / conflict / partial-failure]
+    REG[Ordered provider registry + per-op snapshot]
+    ADM[Provider boundary: skills.add.v1 admission]
+  end
+
+  subgraph PROVIDERS["Providers"]
+    direction TB
+    BUNDLED[Bundled filesystem provider]
+    ADMITTED[Admitted HTTPS provider]
+  end
+
+  AG <-->|JSON-RPC 2.0 / NDJSON| MCP
+  AG <-->|JSON-RPC 2.0 / NDJSON| BUS
+  MCP --> RUNTIME
+  BUS --> RUNTIME
+  REG --> BUNDLED
+  ADM -.admits in-process.-> ADMITTED
+  REG --> ADMITTED
+
+  style CLIENTS fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
+  style TRANSPORTS fill:#1a1a2e,stroke:#50c878,stroke-width:2px,color:#fff
+  style RUNTIME fill:#1a1a2e,stroke:#9b59b6,stroke-width:2px,color:#fff
+  style PROVIDERS fill:#0f3460,stroke:#e67e22,stroke-width:2px,color:#fff
+```
+
+Both transport surfaces wrap the **same** in-process runtime; admitting a provider in-process makes it reachable over both, with **no new bus or worker spawned**. `worker-hosted` and `remote` placements are descriptor-shaped, but this release executes **in-process** placement only.
+
+---
+
+## Provider Boundary
+
+The provider boundary is how a provider the runtime was **not** born with crosses in and federates. The external entry point is the versioned `skills.add.v1` capability over the existing `request` seam — not a new core method, and not a default MCP tool.
 
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables':{'actorBkg':'#1a1a2e','actorBorder':'#4a90e2','actorTextColor':'#fff','signalColor':'#50c878','signalTextColor':'#ddd','noteBkgColor':'#16213e','noteTextColor':'#fff','noteBorderColor':'#e67e22','activationBkgColor':'#0f3460','activationBorderColor':'#9b59b6','sequenceNumberColor':'#f39c12'}}}%%
-sequenceDiagram
-    autonumber
+flowchart LR
+  D[ProviderDescriptor] --> DISC[discover: resolve blueprint]
+  DISC --> VAL[validate: config schema]
+  VAL --> ACQ[acquire: bounded HTTPS]
+  ACQ --> HASH[hash-record: record-only]
+  HASH --> ADMIT[admit: content-as-data + namespace claim]
+  ADMIT --> REG[register: copy-on-write, add-only]
+  VAL -.reject.-> Q[quarantine: typed SkillResponse]
+  ACQ -.reject.-> Q
+  ADMIT -.reject.-> Q
 
-    participant A as AI Agent
-    participant S as MCP Server (stdio)
-    participant D as Skill Content
-
-    A->>+S: list_skills
-    S-->>-A: 17 skills, layers, status, version range
-
-    A->>+S: read_skill { skill: "runtime-patterns-http" }
-    S->>+D: Load SKILL.md
-    D-->>-S: Markdown content
-    S-->>-A: Full skill document
-
-    A->>+S: list_references { skill: "runtime-patterns-http" }
-    S-->>-A: ["common-mistakes.md", "templates/single-get.ts", ...]
-
-    A->>+S: read_reference { skill: "...", reference: "templates/single-get.ts" }
-    S->>+D: Load template file
-    D-->>-S: TypeScript source
-    S-->>-A: Canonical template code
+  style D fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
+  style REG fill:#0f3460,stroke:#50c878,stroke-width:2px,color:#fff
+  style Q fill:#1a1a2e,stroke:#e67e22,stroke-width:2px,color:#fff
 ```
+
+- **Placement model** — a serializable `ProviderDescriptor` (`{ factoryId, config, namespace, trust, capabilityVersions }`) crosses the boundary; a typed `ProviderBlueprint<TConfig>` keyed by `factoryId` rebuilds the provider in-process. A live provider object never crosses a transport.
+- **Staged admission** — `discover → validate → acquire → hash-record → admit → register`. Each stage returns a typed result; the **first** failing stage short-circuits to a **quarantine** (a returned `SkillResponse`, never a throw) that names the rejecting stage and preserves the underlying typed cause.
+- **Federation** — once admitted, `list`/`search` aggregate the bundled provider **and** the admitted provider through the same runtime mechanics: FQID dedupe, conflict surfacing (same FQID, differing content → conflict, never a silent pick), and partial-failure resilience (an admitted-provider outage returns bundled results plus a recorded source error).
+- **Visibility** — each operation captures one provider snapshot at entry; admission is **copy-on-write and add-only**, so a newly admitted provider is visible to the **next** operation without disturbing an in-flight one.
+
+---
+
+## Safety Model
+
+The provider boundary treats an external provider as untrusted by default and earns authority through the pipeline — it is not granted by the descriptor.
+
+- **Namespace ownership / anti-spoofing** — a provider may mint FQIDs only under a namespace it owns. The reserved `bundled:` namespace and any already-owned namespace are rejected at admission, and a registered provider returning an out-of-namespace FQID on **any** operation is rejected at the provider-output boundary (keyed on the real child provider id, never masked by aggregation).
+- **Content-as-data** — acquired content is never executed, `eval`'d, or `require`'d, and never derives authority. The admitted provider stays untrusted; nothing it returns promotes its trust.
+- **Bounded acquisition** — HTTPS fetches enforce `maxContentBytes` (rejected before materialization where the origin declares its size, and while streaming) and a finite timeout with `AbortSignal` cancellation, so a slow or oversized origin cannot hang the runtime. Over-limit content returns a typed `content_too_large`.
+- **Quarantine** — every rejection is a typed, returned `SkillResponse` (`{ code: 'quarantined', stage, cause }`); the registry is left unchanged.
+- **Content hash** — a SHA-256 digest is recorded on provenance for the admitted content. It is **record-only**: it plays no part in dedupe, equality, or conflict detection.
+- **Auth reuse** — where a provider requires authentication, credentials are **consumed** from [`@stdiobus/workers-registry`](https://github.com/stdiobus/workers-registry) over the bus and mapped to request headers. This package implements **no** OAuth, token storage, or refresh of its own; the default is a no-credential adapter for public origins.
+- **TLS** — HTTPS uses the platform's standard TLS trust as-is. There is no certificate-pinning or custom-trust feature.
 
 ---
 
 ## Quick Start
 
-### As an MCP Server
+### As an MCP server
 
-Add the server to your MCP client configuration (Cursor, Claude Desktop, Kiro, Windsurf, etc.). The client will start the process automatically and communicate over stdio:
+Add the server to your MCP client (Cursor, Claude Desktop, Kiro, Windsurf, etc.). The client starts the process and talks to it over stdio:
 
 ```json
 {
@@ -135,7 +183,19 @@ Add the server to your MCP client configuration (Cursor, Claude Desktop, Kiro, W
 }
 ```
 
-### As an npm Library
+The server exposes five tools over [Model Context Protocol](https://modelcontextprotocol.io) (JSON-RPC 2.0 / NDJSON via stdio):
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `list_skills` | — | List all skills with layers, metadata, and validation status |
+| `read_skill` | `skill` | Read the full SKILL.md content for a skill |
+| `list_references` | `skill` | List reference files (templates, error catalogs, guides) for a skill |
+| `read_reference` | `skill`, `reference` | Read a specific reference file |
+| `search_skills` | `query` | Keyword search across all skills (TF-IDF scoring with boost multipliers) |
+
+The `skill` parameter is validated against the `SkillName` enum — only registered skill names are accepted; invalid names return a structured error. `read_reference` is protected against directory traversal.
+
+### As a library
 
 ```bash
 yarn add @stdiobus/skills
@@ -145,476 +205,205 @@ yarn add @stdiobus/skills
 import { SkillName } from '@stdiobus/skills';
 import manifest from '@stdiobus/skills/skills-manifest';
 
-console.log(manifest.skills.length);        // 17
-console.log(manifest.frameworkVersion);      // "0.5.0-beta.2"
-console.log(SkillName.RuntimePatternsHttp); // "runtime-patterns-http"
+console.log(manifest.skills.length);          // 17
+console.log(manifest.frameworkVersion);       // "0.5.3-kata.1"
+console.log(SkillName.RuntimePatternsHttp);   // "runtime-patterns-http"
 ```
 
-### Package Exports
+### Package exports
 
 | Export Path | Content |
 |-------------|---------|
 | `@stdiobus/skills` | `SkillName` enum, `Skill` and `SkillManifest` types |
-| `@stdiobus/skills/mcp-server` | MCP server entry point (programmatic import) |
-| `@stdiobus/skills/skills-manifest` | `skills-manifest.json` — registry of all skills |
+| `@stdiobus/skills/mcp-server` | The read-only MCP server entry point (programmatic import) |
+| `@stdiobus/skills/runtime` | The runtime composition API (admission-capable hosts — see below) |
+| `@stdiobus/skills/skills-manifest` | `skills-manifest.json` — the skill registry |
 | `@stdiobus/skills/skills/*/SKILL.md` | Direct access to skill documents |
 | `@stdiobus/skills/skills/*/references/*` | Direct access to reference materials and templates |
-| `@stdiobus/skills/package.json` | Package metadata |
 
-### Published Files
+### Published files
 
-The npm package includes:
-
-- `out/dist/index.mjs` — ESM library bundle (minified, tree-shaken)
-- `out/dist/mcp-server.mjs` — Executable MCP server (standalone, shebang)
+- `out/dist/index.mjs` — ESM library bundle (`SkillName`, types)
+- `out/dist/mcp-server.mjs` — the executable read-only MCP server (standalone, shebang)
+- `out/dist/runtime.mjs` — the runtime composition API (`@stdiobus/skills/runtime`)
 - `out/tsc/**/*.d.ts` — TypeScript declarations
-- `agent-skills/**/SKILL.md` — All 17 skill documents
-- `agent-skills/**/references/**` — Reference materials, templates, error catalog
-- `agent-skills/skills-manifest.json` — Skill registry with validation status
+- `agent-skills/**/SKILL.md` — all 17 skill documents
+- `agent-skills/**/references/**` — reference materials, templates, error catalog
+- `agent-skills/skills-manifest.json` — the skill registry with validation status
 
 ---
 
-## Available Skill Collection: Runtime Web
+## Runtime Admission
 
-The first and currently shipping skill collection covers [`@worktif/runtime`](https://runtimeweb.com) — an AWS Lambda serverless framework for TypeScript microservices. It contains **17 skills organized across 5 layers**, each validated against real framework types by CI.
+> Admission is **not** a default MCP tool (by design). The default executable stays read-only. A host that wants admission **composes** it from `@stdiobus/skills/runtime` and exposes it on a surface it controls. Enabling admission is an explicit, separate act.
 
-### The 5-Layer Skill Hierarchy
+The composition wires one shared provider view and namespace table into both the runtime and the `AdmissionController`, so an admitted provider is materialized **in-process** and becomes visible to the next operation — with no new bus or worker:
 
-Skills are organized in a dependency-aware hierarchy. Lower layers provide foundational knowledge that higher layers build upon. An agent resolving a task traverses layers bottom-up: understand concepts first, then API surface, then patterns, then constraints, then diagnostics.
+```typescript
+import {
+  AdmissionCapabilities,
+  AdmissionCapabilityHandler,
+  AdmissionController,
+  FilesystemSkillProvider,
+  HttpSkillProviderBlueprint,
+  InProcessSkillsRuntime,
+  MutableProviderView,
+  NamespaceOwnershipTable,
+  OperationBudget,
+  ProviderBlueprintRegistry,
+  Sha256ContentHasher,
+} from '@stdiobus/skills/runtime';
+
+// Bundled provider seeds a mutable view shared by the runtime AND the admission controller.
+const view = new MutableProviderView([new FilesystemSkillProvider({ packageRoot })]);
+const namespaces = new NamespaceOwnershipTable();
+
+// One blueprint registry; the HTTPS blueprint is the external factory that ships in the box.
+const blueprints = new ProviderBlueprintRegistry();
+blueprints.register(new HttpSkillProviderBlueprint());
+
+const controller = new AdmissionController(
+  blueprints,
+  view,
+  namespaces,
+  new OperationBudget(30_000),
+  new Sha256ContentHasher(),
+);
+const admission = new AdmissionCapabilityHandler(controller);
+
+// The runtime reads from the SAME view the controller's register stage mutates; pass the
+// namespace table (anti-spoofing on every operation) and the in-process admission handler.
+const runtime = new InProcessSkillsRuntime(view, undefined, namespaces, admission);
+
+// Admit an external provider over the production `skills.add.v1` path (acquires over real HTTPS).
+const result = await runtime.request(AdmissionCapabilities.add, {
+  factoryId: 'http',
+  namespace: 'external',
+  config: { url: 'https://example.com/SKILL.md', maxContentBytes: 1_000_000, timeoutMs: 30_000 },
+});
+// result.ok === true → the admitted skill is now federated with the bundled provider and
+// readable through the same runtime; a rejection is a returned `{ code: 'quarantined', stage, cause }`.
+```
+
+The same building blocks back the stdio Bus worker: a dispatch table maps the `skills.add.v1` wire method to the same `AdmissionController`, so admission works identically over the bus — again with no new bus or worker spawned.
+
+---
+
+## Bundled Provider Catalog
+
+The skills that ship in the box are served by the **bundled filesystem provider** under the reserved `bundled:` namespace. They are CI-validated against real framework types and are the reference collection the read-only server exposes by default — **17 skills** across two collections.
+
+### Collection 1 — Runtime Web (14 skills, 5 layers)
+
+Covers [`@worktif/runtime`](https://runtimeweb.com), an AWS Lambda serverless framework for TypeScript microservices. Skills are organized in a dependency-aware hierarchy; an agent traverses bottom-up: concepts → API → patterns → guardrails → diagnostics.
 
 ```mermaid
 %%{init: {'theme':'dark', 'themeVariables':{'primaryColor':'#1a1a2e','primaryTextColor':'#fff','primaryBorderColor':'#4a90e2','lineColor':'#50c878','secondaryColor':'#16213e','tertiaryColor':'#0f3460'}}}%%
 flowchart LR
   subgraph L1[Layer 1 Concepts]
-    direction TB
     CO[concepts]
     LC[lifecycle]
   end
-
   subgraph L2[Layer 2 API]
-    direction TB
     AC[api-core]
     AI[api-integrations]
   end
-
   subgraph L3[Layer 3 Patterns]
-    direction TB
     PH[patterns-http]
     PA[patterns-async]
     PD[patterns-data-events]
     SW[ssr-and-web]
+    AX[acceleration]
+    MP[multiplatform]
   end
-
   subgraph L4[Layer 4 Guardrails]
     CG[constraints-and-guardrails]
   end
-
   subgraph L5[Layer 5 Diagnostics]
-    direction TB
     ED[errors-and-diagnostics]
     VM[versioning-and-migration]
     VC[validation-and-ci]
   end
-
   L1 --> L2 --> L3 --> L4 --> L5
-
-  classDef layer1 fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  classDef layer2 fill:#0f3460,stroke:#50c878,stroke-width:2px,color:#fff
-  classDef layer3 fill:#0f3460,stroke:#f39c12,stroke-width:2px,color:#fff
-  classDef layer4 fill:#1a1a2e,stroke:#e67e22,stroke-width:2px,color:#fff
-  classDef layer5 fill:#1a1a2e,stroke:#9b59b6,stroke-width:2px,color:#fff
-
-  class CO,LC layer1
-  class AC,AI layer2
-  class PH,PA,PD,SW layer3
-  class CG layer4
-  class ED,VM,VC layer5
+  classDef l fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
+  class CO,LC,AC,AI,PH,PA,PD,SW,AX,MP,CG,ED,VM,VC l
 ```
 
-### Skills Catalog
+| Layer | Skill | Description |
+|-------|-------|-------------|
+| 1 | **runtime-concepts** | Domain model, Ties pattern, Snapshot pattern, multi-stack CDK, 9 IntegrationKinds, scope boundaries |
+| 1 | **runtime-lifecycle** | Consumer lifecycle: Initialize → Define → Configure → Implement → Build → Deploy → Test → Upgrade |
+| 2 | **runtime-api-core** | Exact signatures: `MicroserviceDefinition`, `LambdaDefinition`, `TiesConstructors`, `LambdaEvent`, `InitFunction` |
+| 2 | **runtime-api-integrations** | Config for all 9 IntegrationKinds, 5 AuthConfig types, CDK construct vs string references |
+| 3 | **runtime-patterns-http** | HTTP patterns: GET, CRUD, JWT/Cognito auth, CORS, path parameters (with templates) |
+| 3 | **runtime-patterns-async** | Async/event-driven: SQS, EventBridge, SNS, Kinesis, schedule — batch, partial failure, idempotency |
+| 3 | **runtime-patterns-data-events** | Data-driven: S3 triggers, DynamoDB Streams / CDC (with templates) |
+| 3 | **runtime-ssr-and-web** | SSR React with `runtime()`, `BrowserProviderStack`, hydration rules |
+| 3 | **runtime-acceleration** | Provider-agnostic acceleration seam at the `LambdaBuilder` chokepoint; the `acceleration.kata` config block, enabled/`unlicensedBehavior` precedence, lazy optional-peer isolation, synth-time transform model |
+| 3 | **runtime-multiplatform** | Multi-platform deploy: `RuntimeConfig.platforms`, `PlatformConfig` shape, shallow-merge resolution vs global config, per-platform resource naming, `--platform` CLI targeting |
+| 4 | **runtime-constraints-and-guardrails** | Hard constraints, complete NOT SUPPORTED list, hard decision rules, dependency externalization |
+| 5 | **runtime-errors-and-diagnostics** | Structured error catalog (BUILD/DEPLOY/RUNTIME/TYPE): pattern → cause → resolution |
+| 5 | **runtime-versioning-and-migration** | Version guidance `>=0.5.0 <1.0.0`, breaking changes, compatibility matrix |
+| 5 | **runtime-validation-and-ci** | CI validation pipeline, `skills-manifest.json` structure, skill update process |
 
-#### Layer 1 — Concepts
+### Collection 2 — stdio Bus SDKs (3 skills)
 
-| Skill | Description |
-|-------|-------------|
-| **runtime-concepts** | Product definition, domain model, Ties pattern, Snapshot pattern, multi-stack CDK architecture, 9 IntegrationKinds, scope boundaries (what IS and IS NOT supported) |
-| **runtime-lifecycle** | Complete consumer lifecycle: Initialize → Define → Configure → Implement → Build → Deploy → Test → Upgrade |
-
-#### Layer 2 — API
-
-| Skill | Description |
-|-------|-------------|
-| **runtime-api-core** | Exact TypeScript signatures for `MicroserviceDefinition`, `LambdaDefinition`, `TiesConstructors`, `LambdaEvent`, `InitFunction`. Generic parameters, field semantics, import paths |
-| **runtime-api-integrations** | Configuration interfaces for all 9 IntegrationKinds (`http`, `sqs`, `eventbridge`, `s3`, `dynamodb`, `sns`, `kinesis`, `schedule`, `direct`). 5 AuthConfig types. CDK construct vs string references |
-
-#### Layer 3 — Patterns
-
-| Skill | Templates | Description |
-|-------|-----------|-------------|
-| **runtime-patterns-http** | `single-get.ts`, `crud-microservice.ts`, `jwt-auth.ts`, `cognito-auth.ts` | HTTP endpoint patterns: GET, CRUD, JWT/Cognito authentication, CORS, path parameters |
-| **runtime-patterns-async** | `sqs-worker.ts`, `eventbridge-fanout.ts`, `sns-pubsub.ts`, `kinesis-processor.ts`, `scheduled-task.ts` | Async event-driven patterns: batch processing, partial failure reporting, idempotency |
-| **runtime-patterns-data-events** | `s3-trigger.ts`, `dynamodb-stream.ts` | Data-driven event patterns: S3 object notifications, DynamoDB Streams with CDC |
-| **runtime-ssr-and-web** | — | SSR React with `runtime()` entry point, `BrowserProviderStack`, hydration rules |
-
-#### Layer 4 — Guardrails
-
-| Skill | Description |
-|-------|-------------|
-| **runtime-constraints-and-guardrails** | All hard constraints (Lambda <10MB, browser <500KB, SDK v3 only, CDK L2/L3 only), complete NOT SUPPORTED list, hard decision rules, dependency externalization rules |
-
-#### Layer 5 — Diagnostics
-
-| Skill | Description |
-|-------|-------------|
-| **runtime-errors-and-diagnostics** | Structured error catalog: BUILD-xxx, DEPLOY-xxx, RUNTIME-xxx, TYPE-xxx. Each entry: pattern → meaning → causes → resolution → decision rule |
-| **runtime-versioning-and-migration** | Version-specific guidance for `>=0.5.0 <1.0.0`. Breaking changes 0.4.x → 0.5.0. Compatibility matrix. Migration steps |
-| **runtime-validation-and-ci** | CI validation pipeline (7 stages), `skills-manifest.json` structure, skill update process |
-
-### Skill Document Structure
-
-Every SKILL.md follows a fixed schema with YAML frontmatter and 6 ordered sections:
-
-```mermaid
-%%{init: {'theme':'dark', 'themeVariables':{'primaryColor':'#1a1a2e','primaryTextColor':'#fff','primaryBorderColor':'#4a90e2','lineColor':'#50c878','secondaryColor':'#16213e','tertiaryColor':'#0f3460'}}}%%
-flowchart LR
-  FM[YAML Frontmatter]
-  OV[Overview]
-  WU[When to Use]
-  CC[Core Concepts]
-  IN[Instructions]
-  CM[Common Mistakes]
-  RF[References]
-
-  FM --> OV --> WU --> CC --> IN --> CM --> RF
-
-  style FM fill:#0f3460,stroke:#9b59b6,stroke-width:2px,color:#fff
-  style OV fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style WU fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style CC fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style IN fill:#0f3460,stroke:#50c878,stroke-width:2px,color:#fff
-  style CM fill:#1a1a2e,stroke:#e67e22,stroke-width:2px,color:#fff
-  style RF fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-```
-
-```yaml
----
-name: runtime-{skill-name}           # Must match directory name
-description: >                        # Multi-line description for agent context
-  What this skill covers and when to use it.
-license: Elastic-2.0
-compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
-metadata:
-  author: worktif
-  version: "1.0.0"
-  framework: "@worktif/runtime"
-  frameworkVersionRange: ">=0.5.0 <1.0.0"
-  layer: "3"                          # 1–5
-  layerName: "Patterns"               # Concepts | API | Patterns | Guardrails | Diagnostics
----
-```
-
-### The Framework Being Documented
-
-`@worktif/runtime` is an AWS Lambda serverless framework. Key concepts that skills teach agents about:
-
-- **Ties pattern** — Typed dependency injection via class constructors (not instances). The framework instantiates; the consumer declares.
-- **Snapshot pattern** — Cold-start caching. An `init` function runs once, returns a cached object available to all warm invocations via `event.snapshot`.
-- **LambdaDefinition\<TTies, TSnapshot, TIntegration\>** — The core type for defining Lambda functions with typed ties, snapshot, and integration-specific events.
-- **MicroserviceDefinition** — Groups Ties classes, an optional init function, and an array of Lambda definitions.
-- **9 IntegrationKinds** — `http`, `sqs`, `eventbridge`, `s3`, `dynamodb`, `sns`, `kinesis`, `schedule`, `direct`.
-- **5 AuthConfig types** — `none`, `iam`, `jwt`, `cognito`, `custom`.
-- **Multi-stack CDK model** — `RuntimeInfraStack` (slow-changing base), `BrowserProviderStack` (optional SSR), `RuntimeWebStack` (microservices), `RuntimeAwakeStack` (optional local debugging).
-
-#### Minimal Example
-
-```typescript
-import { MicroserviceDefinition, LambdaDefinition } from '@worktif/runtime';
-
-class UsersService {
-  async getUser(id: string): Promise<{ id: string; name: string }> {
-    return { id, name: 'Alice' };
-  }
-}
-
-type GetUserTies = { userService: UsersService };
-
-const getUserHandler: LambdaDefinition<GetUserTies> = {
-  id: 'get-user',
-  ties: { userService: UsersService },       // Class constructor, not instance
-  handler: async (event, context) => {
-    const user = await event.ties.userService.getUser(event.pathParameters?.id ?? '');
-    return { statusCode: 200, body: JSON.stringify(user) };
-  },
-  http: { method: 'GET', path: '/users/{id}' },
-};
-
-export const usersService: MicroserviceDefinition = {
-  ties: [],
-  lambdas: [getUserHandler],
-};
-```
-
----
-
-## Available Skill Collection: stdio Bus SDKs
-
-The second skill collection covers the **stdio Bus** platform itself — the C runtime and its language-specific SDKs that manage child worker processes communicating over stdin/stdout using JSON-RPC 2.0 (MCP/ACP). These skills teach agents how to build applications that create, configure, and operate a stdio Bus from C++, Node.js, or Rust.
-
-### Skills Catalog
+Covers the **stdio Bus** platform itself — the C runtime and its language SDKs that manage worker processes over JSON-RPC 2.0 / NDJSON.
 
 | Skill | Language | Package / Crate | Description |
 |-------|----------|-----------------|-------------|
-| **stdiobus-sdk-cpp** | C++ | `libstdio_bus` | Bus/AsyncBus classes, BusBuilder, CMake integration, error handling (status + exception modes), event loop with `step()`/`poll_fd()` |
-| **stdiobus-sdk-node** | Node.js | `@stdiobus/node` | StdioBus class, native/Docker backends, programmatic & file config, `request()`/`send()` API, TCP/Unix listener modes, ACP agent transport |
-| **stdiobus-sdk-rust** | Rust | `stdiobus-client` | Async-first (Tokio), BusBuilder, native/Docker backends, `request()`/`notify()` API, notification subscriptions, ACP protocol flow |
+| **stdiobus-sdk-cpp** | C++ | `libstdio_bus` | Bus/AsyncBus, BusBuilder, CMake, status + exception modes, event loop `step()`/`poll_fd()` |
+| **stdiobus-sdk-node** | Node.js | `@stdiobus/node` | StdioBus, native/Docker backends, `request()`/`send()`, TCP/Unix listeners, ACP transport |
+| **stdiobus-sdk-rust** | Rust | `stdiobus-client` | Async-first (Tokio), BusBuilder, native/Docker backends, `request()`/`notify()`, subscriptions |
 
-### Common Across All SDKs
+### Every SKILL.md follows a fixed schema
 
-All three SDKs share the same underlying C runtime and expose equivalent concepts:
+YAML frontmatter (`name`, `description`, `license`, `compatibility`, `metadata`) followed by six ordered sections: **Overview → When to Use → Core Concepts → Instructions → Common Mistakes → References**. Layer-3 pattern skills include compilable `references/templates/*.ts` validated against real framework types.
 
-- **Worker pools** — JSON config with `pools[].id`, `command`, `args`, `instances`
-- **Lifecycle** — `start()` → running → `stop()` (single-use, no restart)
-- **Messaging** — JSON-RPC 2.0 over NDJSON (newline-delimited JSON)
-- **Operating modes** — Embedded (default), TCP listener, Unix socket listener
-- **Error codes** — Ok, Again, Full, Timeout (retryable) vs Invalid, State, Config, Worker, Routing, PolicyDenied (fatal)
-- **Platform support** — Linux x64/arm64, macOS x64/arm64. Windows via Docker backend only.
+### For agents consuming the bundled skills
 
-### Skill Document Structure
-
-stdio Bus SDK skills use a simplified structure compared to Runtime Web:
-
-```yaml
----
-name: stdiobus-sdk-{language}
-description: >
-  What this skill covers and when to use it.
-license: Apache-2.0
-compatibility: Platform and toolchain requirements
-metadata:
-  author: stdiobus
-  version: "1.0.0"
-  repository: https://github.com/stdiobus/stdiobus-{language}
----
-```
-
-Each skill includes `references/` with API cheatsheets, config schemas, and pattern guides.
-
----
-
-## For AI Agents
-
-### How to Consume Skills
-
-If you are an AI agent or an agentic system integrating this package, follow this consumption protocol:
-
-```mermaid
-%%{init: {'theme':'dark', 'themeVariables':{'actorBkg':'#1a1a2e','actorBorder':'#4a90e2','actorTextColor':'#fff','signalColor':'#50c878','signalTextColor':'#ddd','noteBkgColor':'#16213e','noteTextColor':'#fff','noteBorderColor':'#e67e22','activationBkgColor':'#0f3460','activationBorderColor':'#9b59b6','sequenceNumberColor':'#f39c12'}}}%%
-sequenceDiagram
-    autonumber
-
-    participant A as AI Agent
-    participant M as MCP Server
-    participant S as SKILL.md
-    participant T as templates/*.ts
-    participant G as Guardrails
-
-    A->>+M: list_skills
-    M-->>-A: 17 skills, layers, status, version range
-
-    A->>A: Filter status = valid
-
-    A->>+M: read_skill (traverse layers bottom-up)
-    Note right of S: L1 > L2 > L3 > L4 > L5
-    M->>+S: Load content
-    S-->>-M: Markdown
-    M-->>-A: Domain knowledge + API signatures
-
-    A->>+M: read_reference (get template)
-    M->>+T: Load template
-    T-->>-M: TypeScript source
-    M-->>-A: Compilable template
-
-    A->>A: Adapt template to request
-
-    A->>+M: read_skill (guardrails)
-    M->>+G: Load constraints
-    G-->>-M: Decision rules
-    M-->>-A: Pass / violation
-
-    alt Violation detected
-        A->>A: State unsupported, suggest alternative
-    else Pass
-        A->>A: Return generated code to consumer
-    end
-```
-
-**Protocol steps in detail:**
-
-1. **Discover skills** — Call `list_skills` to get all skills with layers, validation status, and framework version range. Only consume skills with `"status": "valid"`.
-2. **Traverse layers bottom-up** — Need to understand the framework? Start at Layer 1. Need to generate code? Layer 2 (API types) → Layer 3 (templates). Need to validate? Layer 4. Error? Layer 5.
-3. **Use canonical templates** — Call `list_references` and `read_reference` to get templates from `references/templates/*.ts`. These are compilable TypeScript validated against real framework types. Copy and adapt — don't generate from scratch.
-4. **Respect the NOT SUPPORTED list** — Layer 4 contains an explicit list of unsupported features. Do not fabricate framework features.
-5. **Follow hard decision rules** — Each skill contains deterministic decision rules: given condition X, the only correct action is Y. Do not improvise alternatives.
-
-### Skill Selection Heuristic
-
-| Consumer Request | Primary Skill | Supporting Skills |
-|-----------------|---------------|-------------------|
+| Consumer Request | Primary Skill | Supporting |
+|-----------------|---------------|------------|
 | "What is this framework?" | `runtime-concepts` | `runtime-lifecycle` |
 | "Create a GET endpoint" | `runtime-patterns-http` | `runtime-api-core`, `runtime-api-integrations` |
 | "Process SQS messages" | `runtime-patterns-async` | `runtime-api-integrations` |
 | "React to S3 uploads" | `runtime-patterns-data-events` | `runtime-api-integrations` |
-| "Add SSR to my app" | `runtime-ssr-and-web` | `runtime-concepts`, `runtime-lifecycle` |
 | "Is X supported?" | `runtime-constraints-and-guardrails` | `runtime-concepts` |
 | "I'm getting error Y" | `runtime-errors-and-diagnostics` | `runtime-constraints-and-guardrails` |
-| "Upgrade from 0.4 to 0.5" | `runtime-versioning-and-migration` | `runtime-api-core` |
-| "Are these skills up to date?" | `runtime-validation-and-ci` | — |
-| "Create a stdio Bus in C++" | `stdiobus-sdk-cpp` | — |
-| "Spawn workers from Node.js" | `stdiobus-sdk-node` | — |
-| "Use stdiobus in Rust with Tokio" | `stdiobus-sdk-rust` | — |
+| "Create a stdio Bus in C++ / Node / Rust" | `stdiobus-sdk-*` | — |
 
-### Framework Domain Terminology
-
-Skills use specific terminology. Agents should adopt the same terms:
-
-| Canonical Term | Do NOT Use |
-|---------------|------------|
-| **ties** | "dependencies", "DI", "injection" |
-| **consumer** | "user", "developer" |
-| **integration** | "trigger", "event source" |
-| **LambdaDefinition** | "handler definition" |
+Terminology agents should adopt: **ties** (not "dependencies"/"DI"), **consumer** (not "user"), **integration** (not "trigger"), **LambdaDefinition** (not "handler definition").
 
 ---
 
 ## Architecture
 
-### How It Works
-
-```mermaid
-%%{init: {'theme':'dark', 'themeVariables':{'primaryColor':'#1a1a2e','primaryTextColor':'#fff','primaryBorderColor':'#4a90e2','lineColor':'#50c878','secondaryColor':'#16213e','tertiaryColor':'#0f3460'}}}%%
-flowchart TB
-  subgraph CLIENT["MCP Client / AI Agent"]
-    AG[Agent]
-  end
-
-  subgraph SERVER["@stdiobus/skills MCP Server"]
-    direction TB
-    LS[list_skills]
-    RS[read_skill]
-    LR[list_references]
-    RR[read_reference]
-    SS[search_skills]
-  end
-
-  subgraph CONTENT["Skill Content"]
-    direction TB
-    MF[skills-manifest.json]
-    SK[17 × SKILL.md]
-    RF[references / templates]
-    SI[Search Index TF-IDF]
-  end
-
-  AG <-->|"stdio (JSON-RPC 2.0 / NDJSON)"| SERVER
-  LS --> MF
-  RS --> SK
-  LR --> RF
-  RR --> RF
-  SS --> SI
-
-  style CLIENT fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style SERVER fill:#1a1a2e,stroke:#50c878,stroke-width:2px,color:#fff
-  style CONTENT fill:#1a1a2e,stroke:#9b59b6,stroke-width:2px,color:#fff
-
-  classDef clientNode fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  classDef serverNode fill:#1a1a2e,stroke:#50c878,stroke-width:2px,color:#fff
-  classDef contentNode fill:#1a1a2e,stroke:#9b59b6,stroke-width:2px,color:#fff
-
-  class AG clientNode
-  class LS,RS,LR,RR,SS serverNode
-  class MF,SK,RF,SI contentNode
-```
-
-The MCP server is a standalone Node.js executable bundled with esbuild. On startup it:
-
-1. Loads `skills-manifest.json` — the registry of all skills with layer, status, and version range
-2. Pre-loads all 17 SKILL.md files into memory
-3. Builds a TF-IDF search index with boost multipliers (name/description 3×, layerName 2×, body 1×)
-4. Registers five MCP tools and connects to stdio transport
-
-All skill content is resolved from disk relative to the server bundle, with directory traversal protection on `read_reference`.
-
-### Directory Layout
+The MCP server is a thin adapter over the `SkillsRuntime`; the bus worker is another adapter over the **same** in-process runtime. All skill content is resolved from disk relative to the server bundle, with directory-traversal protection on reference reads.
 
 ```
 agent-skills/
-├── mcp-server.ts                     # MCP server entry point (stdio transport)
-├── index.ts                          # Library entry point (SkillName enum, types)
-├── types.ts                          # SkillName enum, Skill and SkillManifest interfaces
-├── skills-manifest.json              # Registry: 17 skills, layers, validation status
-├── lib/
-│   ├── file-resolver.ts              # Disk I/O for skill files and manifest
-│   └── search-index.ts              # TF-IDF search index builder
-├── tools/                            # MCP tool handlers (one file per tool)
-│   ├── list-skills.ts
-│   ├── read-skill.ts
-│   ├── list-references.ts
-│   ├── read-reference.ts
-│   └── search-skills.ts
-├── scripts/
-│   └── validate-skills.ts            # Structural validator (7 validation stages)
-├── __tests__/                        # Jest + fast-check test suites
-│
-├── runtime-concepts/                 # Layer 1
-│   ├── SKILL.md
-│   └── references/
-├── runtime-lifecycle/                # Layer 1
-├── runtime-api-core/                 # Layer 2
-├── runtime-api-integrations/         # Layer 2
-├── runtime-patterns-http/            # Layer 3 (with templates/)
-├── runtime-patterns-async/           # Layer 3 (with templates/)
-├── runtime-patterns-data-events/     # Layer 3 (with templates/)
-├── runtime-ssr-and-web/              # Layer 3
-├── runtime-constraints-and-guardrails/ # Layer 4
-├── runtime-errors-and-diagnostics/   # Layer 5
-├── runtime-versioning-and-migration/ # Layer 5
-├── runtime-validation-and-ci/        # Layer 5
-│
-├── stdiobus-sdk-cpp/                 # stdio Bus SDK (C++)
-├── stdiobus-sdk-node/                # stdio Bus SDK (Node.js)
-└── stdiobus-sdk-rust/                # stdio Bus SDK (Rust)
+├── mcp-server.ts                 # Read-only MCP server entry point (stdio)
+├── index.ts                      # Library entry (SkillName, types)
+├── runtime-bootstrap.ts          # @stdiobus/skills/runtime — composition API
+├── skills-manifest.json          # Registry: 17 skills, layers, validation status
+├── lib/                          # build-server, file-resolver, search-index, tool-render
+├── tools/                        # The five MCP tool handlers
+├── runtime/                      # The federated runtime + provider boundary
+│   ├── contract.ts               # SkillsRuntime, SkillProvider, SkillResponse, errors
+│   ├── in-process-runtime.ts     # The runtime: per-op snapshot, federation, output boundary
+│   ├── registry.ts               # ProviderView / ConstantProviderView / MutableProviderView
+│   ├── federation.ts · fqid.ts · trust.ts · provenance.ts
+│   ├── admission/                # skills.add.v1: descriptor, blueprint, registry,
+│   │                             #   controller, stages, namespace, budget, hasher, credentials
+│   ├── providers/                # filesystem-provider, http-skill-provider
+│   ├── security/                 # boundary, provider-output-validator
+│   └── transport/                # factory, bus-runtime, bus-worker, param-codec
+├── scripts/                      # validate-skills, verify-package
+├── __tests__/                    # Jest + fast-check (unit, integration, property, live E2E)
+└── runtime-* / stdiobus-sdk-*    # The 17 bundled skill directories
 ```
 
-### Build System
-
-```mermaid
-%%{init: {'theme':'dark', 'themeVariables':{'primaryColor':'#1a1a2e','primaryTextColor':'#fff','primaryBorderColor':'#4a90e2','lineColor':'#50c878','secondaryColor':'#16213e','tertiaryColor':'#0f3460'}}}%%
-flowchart LR
-  SRC1[agent-skills/index.ts]
-  SRC2[agent-skills/mcp-server.ts]
-
-  SRC1 --> ESB1[esbuild: bundle, minify, tree-shake]
-  SRC2 --> ESB2[esbuild: bundle + shebang banner]
-  SRC1 --> TSC[tsc: declarations only]
-
-  ESB1 --> DIST1[out/dist/index.js ESM]
-  ESB2 --> DIST2[out/dist/mcp-server.mjs]
-  TSC --> TYPES[out/tsc/*.d.ts]
-
-  style SRC1 fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style SRC2 fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style ESB1 fill:#1a1a2e,stroke:#50c878,stroke-width:2px,color:#fff
-  style ESB2 fill:#1a1a2e,stroke:#50c878,stroke-width:2px,color:#fff
-  style TSC fill:#1a1a2e,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style DIST1 fill:#0f3460,stroke:#50c878,stroke-width:2px,color:#fff
-  style DIST2 fill:#0f3460,stroke:#50c878,stroke-width:2px,color:#fff
-  style TYPES fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-```
-
-| Target | Entry | Output | Purpose |
-|--------|-------|--------|---------|
-| **ESM Bundle** | `agent-skills/index.ts` | `out/dist/index.js` | Library (SkillName enum, types) |
-| **MCP Server** | `agent-skills/mcp-server.ts` | `out/dist/mcp-server.mjs` | Executable MCP server with `#!/usr/bin/env node` |
-| **Declarations** | `agent-skills/index.ts` | `out/tsc/*.d.ts` | TypeScript type declarations |
+Build is esbuild (three ESM bundles: `index.mjs`, `mcp-server.mjs`, `runtime.mjs`) plus `tsc` for declarations only. Node built-ins are externalized; everything else is bundled.
 
 ---
 
@@ -622,149 +411,40 @@ flowchart LR
 
 ### Prerequisites
 
-- Node.js ≥20.0.0
-- Yarn 1.22.x (classic)
-- TypeScript 5.4+
+- Node.js ≥20.0.0 · Yarn 1.22.x (classic) · TypeScript 5.4+
 
 ### Commands
 
 ```bash
-# Install dependencies
-yarn install
-
-# Full build (clean + esbuild bundle + tsc declarations)
-yarn build
-
-# Type-check without emitting
-yarn typecheck
-
-# Validate all 17 skill structures (7-stage pipeline)
-yarn validate
-
-# Run all tests (Jest + fast-check)
-yarn test
-
-# Run tests with coverage (threshold: 80%)
-yarn test:coverage
-
-# Full CI pipeline (typecheck + validate + test)
-yarn ci
-
-# Clean build output
-yarn clean
+yarn install         # install dependencies
+yarn build           # clean + esbuild bundles + tsc declarations
+yarn typecheck       # type-check without emitting
+yarn validate        # structural validation of all 17 SKILL.md files
+yarn test            # run all tests (Jest + fast-check)
+yarn test:coverage   # run tests with coverage (gate: 80%)
+yarn ci              # full pipeline: typecheck → validate → test
+yarn verify:package  # verify the published surface (5 tools, 17 skills, cleanliness)
+yarn clean           # remove out/
 ```
 
-### Test Strategy
+### Test strategy
 
-Tests use both example-based (Jest) and property-based (fast-check) approaches:
+Tests are example-based (Jest) and property-based (fast-check), plus a mock-free **live E2E** that packs the package, installs it into a clean consumer, and proves admission + federation + read-back over **both** transports against a real public HTTPS origin.
 
-| Test Suite | What It Validates |
-|------------|-------------------|
-| `mcp-server/tools/` | Unit tests for each MCP tool handler |
-| `mcp-server/integration/` | Full MCP protocol round-trip tests (stdio) |
-| `mcp-server/properties/` | Property-based tests: enum-manifest sync, search ordering, content readability |
-| `mcp-server/lib/` | Unit tests for file-resolver and search-index |
-| `validators/` | Unit tests for each validation function (name, frontmatter, body, error catalog, terminology) |
-| `skills/` | Skill content verification (cross-references, layer assignments, content structure) |
-| `templates/` | Template compilation against real `@worktif/runtime` types |
-| `checkpoints/` | End-to-end validation of all 17 skills |
-| `ci/` | CI integration tests |
+| Suite | What it validates |
+|-------|-------------------|
+| `runtime/admission/`, `runtime/security/` | Admission stages, controller totality, namespace anti-spoofing, content bounds |
+| `runtime/properties/` | Invariants (fast-check): error totality, per-op snapshot consistency, transport equivalence, aggregation |
+| `runtime/federation-two-providers.test.ts` | Federation with the bundled + a second real provider |
+| `mcp-server/`, `ci/` | MCP protocol round-trips, tool handlers, validation/package integration |
+| `e2e/live-provider-boundary.e2e.test.ts` | Installed-package proof over MCP stdio **and** stdio Bus, real HTTPS, no mocks |
 
-### Validation Pipeline
-
-The `yarn validate` command runs a 7-stage structural validation:
-
-```mermaid
-%%{init: {'theme':'dark', 'themeVariables':{'primaryColor':'#1a1a2e','primaryTextColor':'#fff','primaryBorderColor':'#4a90e2','lineColor':'#50c878','secondaryColor':'#16213e','tertiaryColor':'#0f3460'}}}%%
-flowchart LR
-  S1[Structural validation]
-  S2[Template compilation]
-  S3[API existence check]
-  S4[Error catalog validation]
-  S5[Cross-reference integrity]
-  S6[Terminology check]
-  S7[Manifest update]
-
-  S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
-
-  style S1 fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style S2 fill:#0f3460,stroke:#4a90e2,stroke-width:2px,color:#fff
-  style S3 fill:#0f3460,stroke:#50c878,stroke-width:2px,color:#fff
-  style S4 fill:#0f3460,stroke:#50c878,stroke-width:2px,color:#fff
-  style S5 fill:#1a1a2e,stroke:#e67e22,stroke-width:2px,color:#fff
-  style S6 fill:#1a1a2e,stroke:#e67e22,stroke-width:2px,color:#fff
-  style S7 fill:#1a1a2e,stroke:#9b59b6,stroke-width:2px,color:#fff
-```
-
-| Stage | What It Checks |
-|-------|---------------|
-| Structural validation | SKILL.md exists, frontmatter is complete, body follows section order |
-| Template compilation | All `references/templates/*.ts` compile with `tsc --noEmit` |
-| API existence check | Referenced types exist in `@worktif/runtime` public exports |
-| Error catalog validation | `error-catalog.json` conforms to schema, IDs are unique |
-| Cross-reference integrity | All `../skill-name/SKILL.md` links resolve |
-| Terminology check | Canonical terms used consistently (no "dependencies" for ties, etc.) |
-| Manifest update | `skills-manifest.json` updated with validation results |
-
-### Skills Manifest
-
-`skills-manifest.json` is the source of truth for skill validation state:
-
-```json
-{
-  "version": "1.0.0",
-  "frameworkVersion": "0.5.0-beta.2",
-  "skills": [
-    {
-      "name": "runtime-concepts",
-      "layer": 1,
-      "versionRange": ">=0.5.0 <1.0.0",
-      "status": "valid",
-      "lastValidated": "2026-05-02T12:00:00.000Z"
-    }
-  ]
-}
-```
-
-Status values: `"valid"` | `"outdated"` | `"failed"`.
-
----
-
-## Compatibility
-
-| Dependency | Version |
-|-----------|---------|
-| `@worktif/runtime` | ≥0.5.0 <1.0.0 |
-| Node.js | ≥20.0.0 |
-| TypeScript | 5.4+ |
-| AWS SDK | v3 only (modular `@aws-sdk/client-*`) |
-| aws-cdk-lib | 2.x |
-| React | 19.x (dev) / 16.14–18.x (peer) |
-| React Router | 7.7+ |
-
----
-
-## Contributing
-
-### Adding a New Skill
-
-1. Create `agent-skills/{skill-name}/SKILL.md` following the standard schema
-2. Add `references/` directory with supporting materials
-3. Add the enum member to `SkillName` in `agent-skills/types.ts`
-4. Add the entry to `agent-skills/skills-manifest.json`
-5. Run `yarn validate` to verify structural correctness
-6. Run `yarn test` to verify all tests pass
-7. Update cross-references in related skills
-
-### Updating Skills After API Changes
-
-1. Run `yarn ci` — failed skills are identified
-2. Update affected templates and SKILL.md content
-3. Re-run `yarn validate` — all skills must pass
-4. Update `frameworkVersion` in `skills-manifest.json`
+Coverage gate is **80%** across branches, functions, lines, and statements.
 
 ---
 
 ## License
 
-[Apache-2.0](LICENSE) © 2026-present [Raman Marozau](mailto:raman@worktif.com), Target Insight Function contributors
+[Apache-2.0](https://github.com/stdiobus/skills/blob/main/LICENSE) © Raman Marozau
+
+Part of the [stdio Bus](https://github.com/stdiobus) ecosystem.
