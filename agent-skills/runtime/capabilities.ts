@@ -18,6 +18,8 @@ import {
   type SkillContent,
   type SkillDescriptor,
 } from './contract.js';
+import type { AdmittedProvider } from './admission/outcome.js';
+import type { RawProviderDescriptor } from './admission/provider-descriptor.js';
 
 /**
  * Versioned core capability descriptors.
@@ -40,6 +42,25 @@ export const SkillsCapabilities = {
     'skills.references.read.v1',
     '1',
   ),
+} as const;
+
+/**
+ * EXTENSION capability descriptors — reached through the existing `request` seam, NOT part
+ * of the core method set (Req 1.1, 15.3).
+ *
+ * `skills.add.v1` admits an external skill provider. It is deliberately kept OUT of
+ * {@link CORE_CAPABILITIES} so it never surfaces as a default MCP tool: the production MCP
+ * adapter registers only the five bundled tools (Req 15.1, 15.3). Admission is reached
+ * solely through `runtime.request(AdmissionCapabilities.add, rawDescriptor)` (the raw wire
+ * descriptor is normalized at the single decode boundary before the `AdmissionController`
+ * runs — design §"Components" 7).
+ *
+ * Its input is the WIRE {@link RawProviderDescriptor} (`trust` / `capabilityVersions`
+ * optional) and its success output is the {@link AdmittedProvider} identity + record-only
+ * content hash (Req 1.2).
+ */
+export const AdmissionCapabilities = {
+  add: capability<RawProviderDescriptor, AdmittedProvider>('skills.add.v1', '1'),
 } as const;
 
 /** All core capabilities as a flat list, for `SkillsRuntime.capabilities()` introspection. */

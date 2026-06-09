@@ -79,6 +79,29 @@ export interface ProvenanceSeed {
 // Error model (public boundary — returned, never thrown)
 // ---------------------------------------------------------------------------
 
+/**
+ * Admission pipeline stage names — INLINED here to MIRROR `AdmissionStageName` in
+ * `./admission/stage.ts` (Milestone-002, Task 9.2).
+ *
+ * This literal union is a deliberate, documented MIRROR of the authoritative
+ * `AdmissionStageName` declared in `./admission/stage.ts`. It is duplicated rather than
+ * imported because `contract.ts` is the lowest-level module of the runtime: `admission/stage.ts`
+ * (and the whole admission layer) already imports {@link SkillRuntimeError} from HERE, so
+ * importing `AdmissionStageName` back into `contract.ts` would form a `contract ⇄ stage`
+ * import cycle AND invert the layering (the contract would depend on the admission layer it
+ * underpins). The two unions are structurally identical string-literal unions, so a value of
+ * the admission layer's `AdmissionStageName` is assignable to this one without a cast. Keep
+ * the two in lockstep by hand: if the admission pipeline gains or renames a stage, update
+ * BOTH this union and `admission/stage.ts`.
+ */
+export type AdmissionStageName =
+  | 'discover'
+  | 'validate'
+  | 'acquire'
+  | 'hash-record'
+  | 'admit'
+  | 'register';
+
 export type SkillRuntimeError =
   | { code: 'not_found'; ref: SkillRef }
   | { code: 'ambiguous'; ref: SkillRef; candidates: SkillDescriptor[] }
@@ -88,7 +111,14 @@ export type SkillRuntimeError =
   | { code: 'out_of_bounds'; provider: string; detail: string }
   | { code: 'content_too_large'; provider: string; limitBytes: number }
   | { code: 'isolation_failed'; provider: string; reason: string }
-  | { code: 'aggregate_error'; failures: Array<{ provider: string; error: SkillRuntimeError }> };
+  | { code: 'aggregate_error'; failures: Array<{ provider: string; error: SkillRuntimeError }> }
+  // Admission quarantine envelope (Milestone-002, Task 9.2; design §"Error Handling").
+  // A THIN wrapper, not a replacement code: the typed `cause` stays AUTHORITATIVE and carries
+  // the real rejection (`bad_request`, `content_too_large`, `provider_error`, ...), while the
+  // envelope adds the rejecting `stage` (Req 9.2). Both `stage` and `cause.code` survive on
+  // the wire, so a client switches on either. Added additively (Milestone-001 Req 2.5); no
+  // existing member or `SkillResponse<T>` changes.
+  | { code: 'quarantined'; stage: AdmissionStageName; cause: SkillRuntimeError };
 
 /** Discriminated response. Survives a serialized transport boundary unchanged. */
 export type SkillResponse<T> =

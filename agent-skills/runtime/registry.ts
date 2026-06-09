@@ -35,6 +35,110 @@ import { createSkillsRuntime, type TransportConfig } from './transport/factory.j
 import { resolveTrustPolicy, UNTRUSTED_DEFAULT, type TrustPolicy } from './trust.js';
 import type { SkillProvider, SkillsRuntime } from './contract.js';
 
+// =============================================================================
+// Per-operation provider snapshot — the stable provider VIEW (Migration Step 3,
+// Task 4.1; design §"Components" 5, Req 10.1, 10.5, 10.6).
+//
+// The runtime reads its provider list from a stable {@link ProviderView} and
+// captures exactly ONE snapshot at each operation's entry (the threading of that
+// snapshot through every helper is Task 4.2 — NOT done here). This file adds only
+// the view abstractions:
+//
+//   - {@link ProviderView}        — the read seam: `providers()` in precedence order.
+//   - {@link ConstantProviderView} — the baseline wrapper for the proven array
+//                                     constructor. It returns the fixed array EXACTLY
+//                                     as given (same reference, same order, same
+//                                     identities), so the pre-M-002 single-bundled-
+//                                     provider path is byte-for-byte unchanged
+//                                     (Req 10.1, design fix 9).
+//   - {@link MutableProviderView}  — the admission target: COPY-ON-WRITE `admit`
+//                                     (Req 10.5) that is ADD-ONLY — no remove, no
+//                                     dispose, no evict (Req 10.6).
+// =============================================================================
+
+/**
+ * The stable read seam the runtime obtains its provider list from (Req 10.1, 10.2).
+ *
+ * An operation captures exactly one snapshot via {@link providers} at entry and threads
+ * that array through every helper (the threading is Task 4.2). A fixed provider array is a
+ * {@link ConstantProviderView} (the proven baseline); an admission-capable registry is a
+ * {@link MutableProviderView}.
+ */
+export interface ProviderView {
+  /**
+   * The current providers in precedence order (earliest = highest precedence).
+   *
+   * The returned array is a STABLE snapshot: a {@link MutableProviderView.admit} that runs
+   * AFTER this call does not mutate an already-returned array (copy-on-write, Req 10.5), so
+   * an in-flight operation that captured an earlier snapshot keeps its own provider set.
+   */
+  providers(): ReadonlyArray<SkillProvider>;
+}
+
+/**
+ * Baseline wrapper for the proven array-constructed runtime (Req 10.1, design fix 9).
+ *
+ * Wrapping an array in a {@link ConstantProviderView} is a pure structural adapter: it
+ * introduces NO new ordering, equality, trust-resolution, or federation behavior.
+ * {@link providers} returns the fixed array EXACTLY as given (same reference), so provider
+ * **order**, provider **identity** (same object references and `id`s), the `trustOf` /
+ * provenance lookup keyed off those `id`s, and the exact inputs handed to
+ * `dedupeWithConflicts` are all byte-for-byte identical to the pre-M-002 array constructor.
+ * This view is NOT mutable — it has no `admit`.
+ */
+export class ConstantProviderView implements ProviderView {
+  /**
+   * @param fixed - the immutable provider array in precedence order, returned verbatim.
+   */
+  constructor(private readonly fixed: ReadonlyArray<SkillProvider>) { }
+
+  /** The fixed providers, returned EXACTLY as given (same reference, order, identities). */
+  providers(): ReadonlyArray<SkillProvider> {
+    return this.fixed;
+  }
+}
+
+/**
+ * The admission target: a {@link ProviderView} whose set grows by COPY-ON-WRITE (Req 10.5)
+ * and is ADD-ONLY (Req 10.6).
+ *
+ * {@link admit} replaces the internal reference with a freshly-allocated array
+ * (`[...current, provider]`) rather than mutating in place. Any array a caller already
+ * obtained from {@link providers} is therefore frozen at the moment it was captured: an
+ * `admit` interleaved with an in-flight operation cannot change that operation's provider
+ * set (per-operation snapshot consistency, design Property 3). There is deliberately NO
+ * `remove`, `dispose`, or `evict` method — M-002 is add-only (Req 10.6, 12.4).
+ */
+export class MutableProviderView implements ProviderView {
+  /** The current providers in precedence order; replaced wholesale on each {@link admit}. */
+  private current: ReadonlyArray<SkillProvider>;
+
+  /**
+   * @param initial - optional seed providers in precedence order (default: empty).
+   */
+  constructor(initial: ReadonlyArray<SkillProvider> = []) {
+    // Copy the seed so a later mutation of the caller's array cannot reach into this view.
+    this.current = [...initial];
+  }
+
+  /** The current providers snapshot in precedence order. */
+  providers(): ReadonlyArray<SkillProvider> {
+    return this.current;
+  }
+
+  /**
+   * Add a provider to the END of the precedence order, COPY-ON-WRITE (Req 10.5).
+   *
+   * Allocates a new array and swaps the reference; any previously-returned snapshot is
+   * untouched. Add-only: there is no inverse operation in M-002 (Req 10.6).
+   *
+   * @param provider - the newly-admitted provider to append (lowest precedence).
+   */
+  admit(provider: SkillProvider): void {
+    this.current = [...this.current, provider];
+  }
+}
+
 /**
  * A provider together with its (optional) trust policy.
  *

@@ -22,6 +22,18 @@ const runtimeExternals = ['@stdiobus/node'];
 
 const external = [...nodeBuiltins, ...runtimeExternals];
 
+// The advanced runtime-composition subpath (`@stdiobus/skills/runtime`) additionally keeps
+// the heavy declared dependencies EXTERNAL (resolved from the consumer's node_modules at
+// runtime, where they are installed transitively) so the bundle stays small and the
+// published tarball stays well under its size budget. The MCP server bundle deliberately
+// inlines the SDK for a self-contained executable; the library subpath does not need to.
+const runtimeSubpathExternal = [
+  ...external,
+  '@modelcontextprotocol/sdk',
+  '@modelcontextprotocol/sdk/*',
+  'zod',
+];
+
 // ─── Build targets ──────────────────────────────────────────────
 
 const targets = {
@@ -61,6 +73,21 @@ const targets = {
         'const __dirname = __mcp_dirname(__filename);',
       ].join('\n'),
     },
+    loader: { '.json': 'json' },
+    logLevel: 'info',
+  },
+  runtime: {
+    label: 'Runtime Composition API',
+    entryPoints: ['agent-skills/runtime-bootstrap.ts'],
+    outfile: 'out/dist/runtime.mjs',
+    bundle: true,
+    platform: 'node',
+    target: ['node20'],
+    format: 'esm',
+    treeShaking: true,
+    minify: true,
+    sourcemap: false,
+    external: runtimeSubpathExternal,
     loader: { '.json': 'json' },
     logLevel: 'info',
   },

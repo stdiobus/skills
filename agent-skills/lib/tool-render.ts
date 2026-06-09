@@ -81,6 +81,10 @@ export function describeError(error: SkillRuntimeError): string {
       return error.reason;
     case 'aggregate_error':
       return error.failures.map((f) => `${f.provider}: ${describeError(f.error)}`).join('; ');
+    case 'quarantined':
+      // Thin envelope: surface the rejecting stage AND the authoritative typed cause so the
+      // diagnostic preserves both (design §"Error Handling"; Req 9.2).
+      return `provider admission quarantined at stage "${error.stage}": ${describeError(error.cause)}`;
   }
 }
 

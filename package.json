@@ -18,6 +18,11 @@
       "import": "./out/dist/mcp-server.mjs",
       "default": "./out/dist/mcp-server.mjs"
     },
+    "./runtime": {
+      "types": "./out/tsc/runtime-bootstrap.d.ts",
+      "import": "./out/dist/runtime.mjs",
+      "default": "./out/dist/runtime.mjs"
+    },
     "./skills-manifest": {
       "default": "./agent-skills/skills-manifest.json"
     },

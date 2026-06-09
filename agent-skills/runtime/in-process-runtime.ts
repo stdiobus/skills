@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CORE_CAPABILITIES, SkillsCapabilities } from './capabilities.js';
+import { AdmissionCapabilities, CORE_CAPABILITIES, SkillsCapabilities } from './capabilities.js';
 import type {
   CapabilityDescriptor,
   CapabilityRef,
@@ -26,10 +26,14 @@ import type {
   SkillRuntimeError,
   SkillsRuntime,
 } from './contract.js';
+import type { NamespaceOwnershipTable } from './admission/namespace-ownership.js';
+import type { AdmittedProvider } from './admission/outcome.js';
+import type { RawProviderDescriptor } from './admission/provider-descriptor.js';
 import { type AggregateDiagnostics, attachAggregateDiagnostics } from './federation.js';
-import { guardDescriptorIdentity } from './fqid.js';
 import { finalizeProvenance } from './provenance.js';
-import { checkContentSize, checkIsolation, checkWithinRoot } from './security/boundary.js';
+import { ConstantProviderView, type ProviderView } from './registry.js';
+import { checkIsolation, checkWithinRoot } from './security/boundary.js';
+import { ProviderOutputValidator } from './security/provider-output-validator.js';
 import type { TrustPolicy } from './trust.js';
 
 /**
@@ -45,6 +49,23 @@ import type { TrustPolicy } from './trust.js';
 export type TrustLookup = (providerId: string) => TrustPolicy | undefined;
 
 /**
+ * In-process admission seam for the `request` extension dispatch (Task 9.2; design §"Components" 7).
+ *
+ * The OPTIONAL handler the runtime delegates a `skills.add.v1` `request` to, so admission is
+ * reached IN-PROCESS through `runtime.request(AdmissionCapabilities.add, rawDescriptor)` —
+ * the same way the bus reaches it through the worker dispatch — without the runtime importing
+ * the concrete {@link AdmissionCapabilityHandler} (the structural shape is enough, keeping the
+ * dependency direction runtime ⇠ admission intact). It is wired as an OPTIONAL constructor
+ * dependency: when omitted (every proven call site), `request('skills.add.v1', …)` returns
+ * `unsupported` exactly as before, so this is strictly additive and backward-compatible
+ * (Req 15.1, 15.3). The handler normalizes the raw wire descriptor and delegates to the
+ * single {@link AdmissionController}; the runtime holds no admission logic of its own.
+ */
+export interface AdmissionRequestHandler {
+  handle(raw: RawProviderDescriptor): Promise<SkillResponse<AdmittedProvider>>;
+}
+
+/**
  * In-process implementation of {@link SkillsRuntime}.
  *
  * Knows ONLY providers, refs, capabilities, responses, and provenance. It does not know
@@ -57,17 +78,69 @@ export type TrustLookup = (providerId: string) => TrustPolicy | undefined;
  */
 export class InProcessSkillsRuntime implements SkillsRuntime {
   /**
-   * @param providers - the ordered providers (precedence = order).
+   * The stable read seam the runtime obtains its provider list from (Req 10.1, 10.2;
+   * design §"Components" 5). Each public operation captures EXACTLY ONE snapshot from this
+   * view at entry (`view.providers()`) and threads that single array through every helper —
+   * the helpers never re-read the view, so mixed-snapshot reads are mechanically prevented
+   * (Req 10.3) and an `admit` interleaved with an in-flight operation cannot change that
+   * operation's provider set (design Property 3).
+   */
+  private readonly view: ProviderView;
+
+  /**
+   * Provider-output ingress validator (Task 6; design §"Components" 6; Req 6, 5.4, 5.5).
+   *
+   * Applied at the provider-output boundary of EVERY public operation — `resolve` (via
+   * {@link resolveOne}), `list`, `search`, and the provider methods behind `getReferences` /
+   * `readReference` — BEFORE a returned value is exposed to a caller or to aggregation. It
+   * composes the existing pure guards ({@link guardDescriptorIdentity}, {@link checkContentSize})
+   * and the namespace anti-spoofing predicate, adding NO new trust evaluation. Both the
+   * namespace table and the trust lookup it holds are optional, so when neither is wired the
+   * validator is identity-only and behaves exactly like the pre-Task-6 boundary — the proven
+   * single-bundled-provider baseline is byte-for-byte unchanged (Req 15.2).
+   */
+  private readonly outputValidator: ProviderOutputValidator;
+
+  /**
+   * @param view - the provider source. Accepts EITHER a stable {@link ProviderView} (the
+   *   admission-capable `MutableProviderView`, or any view) OR — for backward compatibility
+   *   with every proven array-constructed call site — a plain `ReadonlyArray<SkillProvider>`,
+   *   which is wrapped verbatim in a {@link ConstantProviderView}. The wrap is a pure
+   *   structural adapter: provider order, identity, `trustOf`/provenance lookup, and the
+   *   exact inputs handed to `dedupeWithConflicts` are byte-for-byte unchanged, so the
+   *   single-bundled-provider baseline is identical to pre-M-002 (Req 10.1, 15.2, design
+   *   fix 9).
    * @param trustOf - OPTIONAL per-provider trust lookup (Task 9.2). When supplied, the
    *   runtime enforces each provider's `permittedRoot` (path-traversal → `out_of_bounds`)
    *   and `maxContentBytes` (oversize → `content_too_large`) at the read boundary, as
    *   RETURNED errors (never thrown). When omitted, no security enforcement is applied and
    *   behavior is identical to the proven baseline.
+   * @param namespaces - OPTIONAL namespace-ownership source of truth (Task 6; Req 5.4, 5.5).
+   *   When supplied, the provider-output boundary additionally rejects any descriptor whose
+   *   declared FQID falls outside the namespace owned by the producing provider — keyed on
+   *   the actual child provider id, never masked by aggregation. The reserved `bundled`
+   *   provider (and any provider that owns no namespace) is EXEMPT, so wiring a table for a
+   *   federated deployment never rejects bundled output. When omitted, the namespace check
+   *   is inert and the descriptor-identity boundary is exactly the proven baseline.
+   * @param admission - OPTIONAL in-process admission seam (Task 9.2). When supplied,
+   *   `request(AdmissionCapabilities.add, rawDescriptor)` is delegated to it (normalize →
+   *   admit → map), so admission is reachable in-process through the SAME `request` seam the
+   *   bus reaches it through the worker dispatch. When omitted, `request('skills.add.v1', …)`
+   *   returns `unsupported` exactly as before — strictly additive, backward-compatible.
    */
   constructor(
-    private readonly providers: ReadonlyArray<SkillProvider>,
+    view: ProviderView | ReadonlyArray<SkillProvider>,
     private readonly trustOf?: TrustLookup,
-  ) { }
+    namespaces?: NamespaceOwnershipTable,
+    private readonly admission?: AdmissionRequestHandler,
+  ) {
+    // Backward-compat (Req 10.1, 15.2): a passed array is wrapped in a ConstantProviderView
+    // so the proven baseline is byte-for-byte unchanged; a ProviderView is used as given.
+    this.view = Array.isArray(view) ? new ConstantProviderView(view) : (view as ProviderView);
+    // The validator reuses the runtime's own trust lookup for the content-size bound and the
+    // optional namespace table for anti-spoofing. Both optional → inert by default (baseline).
+    this.outputValidator = new ProviderOutputValidator(namespaces, this.trustOf);
+  }
 
   // --- security boundary (Task 9.2; design §9; Req 11.4, 11.5) ----------
 
@@ -112,10 +185,11 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
    * when there is no trust lookup (no enforcement → proven baseline behavior).
    */
   private enforceContentSize(providerId: string, content: string): SkillResponse<never> | null {
-    const policy = this.trustOf?.(providerId);
-    if (!policy) return null;
-    const res = checkContentSize(content, policy.maxContentBytes, providerId);
-    return res.ok ? null : { ok: false, error: res.error };
+    // Delegated to the provider-output validator (Task 6): it reuses the same pure
+    // `checkContentSize` guard against the provider's effective `maxContentBytes`, so this
+    // is behavior-identical to the prior inline check (inert with no trust lookup → baseline).
+    const error = this.outputValidator.validateContentSize(providerId, content);
+    return error ? { ok: false, error } : null;
   }
 
   /**
@@ -150,8 +224,11 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
     if (!provider.readMetadata) return null;
     const meta = await provider.readMetadata(resolved, reference);
     if (typeof meta.sizeBytes !== 'number') return null;
-    const res = checkContentSize(meta.sizeBytes, policy.maxContentBytes, provider.id);
-    return res.ok ? null : { ok: false, error: res.error };
+    // Pre-read ("not loaded in full") size bound via the provider-output validator (Task 6):
+    // the byte-count overload of the same pure `checkContentSize` guard, so this is
+    // behavior-identical to the prior inline check.
+    const error = this.outputValidator.validateContentSize(provider.id, meta.sizeBytes);
+    return error ? { ok: false, error } : null;
   }
 
   /**
@@ -201,10 +278,11 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
    * internal `ResolutionDiagnostics` the runtime attributes from — not a public type.
    */
   private async resolveAll(
+    providers: ReadonlyArray<SkillProvider>,
     ref: SkillRef,
   ): Promise<{ candidates: ResolvedSkill[]; failures: Array<{ provider: string; error: SkillRuntimeError }> }> {
     const outcomes = await Promise.all(
-      this.providers.map(
+      providers.map(
         async (
           p,
         ): Promise<
@@ -255,19 +333,24 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   /**
    * Descriptor identity guard at provider ingress (Req 5.7, 1.5; design §5).
    *
-   * Runs {@link guardDescriptorIdentity} over a batch of provider-produced descriptors and
-   * returns the FIRST inadmissible descriptor's `bad_request` error, or `null` when every
-   * descriptor carries a valid, consistent identity. Funnelling every resolution / list /
-   * search ingress through this one method guarantees no partial, empty, oversized, or
-   * inconsistent descriptor is admitted — or used as an FQID dedupe key — without being
-   * rejected as a returned error (never thrown). NARROW: identity only, not content.
+   * Runs {@link ProviderOutputValidator.validateDescriptors} over a batch of descriptors
+   * produced by ONE provider and returns the FIRST inadmissible descriptor's error, or
+   * `null` when every descriptor is admissible. Funnelling every resolution / list / search
+   * ingress through this one method guarantees no partial, malformed, oversized, or
+   * out-of-namespace descriptor is admitted — or used as an FQID dedupe key — without being
+   * rejected as a returned error (never thrown).
+   *
+   * `producingProviderId` is the id of the provider that ACTUALLY produced the batch (the
+   * child id — Req 5.5), so the validator's namespace anti-spoofing check is anchored on the
+   * real source and can never be masked by aggregation. Identity is always checked; the
+   * namespace check is additive and inert unless an ownership table is wired and the provider
+   * owns a namespace (so the bundled-only baseline is unchanged).
    */
-  private guardDescriptors(descriptors: readonly SkillDescriptor[]): SkillRuntimeError | null {
-    for (const descriptor of descriptors) {
-      const error = guardDescriptorIdentity(descriptor);
-      if (error) return error;
-    }
-    return null;
+  private guardDescriptors(
+    producingProviderId: string,
+    descriptors: readonly SkillDescriptor[],
+  ): SkillRuntimeError | null {
+    return this.outputValidator.validateDescriptors(producingProviderId, descriptors);
   }
 
   /**
@@ -362,15 +445,21 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
    * fix reuses the existing mechanism rather than introducing a new policy type.
    */
   private async resolveOne(
+    providers: ReadonlyArray<SkillProvider>,
     ref: SkillRef,
   ): Promise<{ ok: true; resolved: ResolvedSkill } | { ok: false; error: SkillResponse<never> }> {
-    const { candidates, failures } = await this.resolveAll(ref);
-    // Descriptor identity guard (Req 5.7, 1.5): a provider-produced descriptor must carry a
-    // valid, CONSISTENT identity BEFORE it enters FQID-keyed dedupe/resolution. An invalid
-    // (partial/empty/oversized/inconsistent) descriptor is rejected as a returned
-    // `bad_request` — never admitted, never used as a dedupe key, never thrown.
-    const guardError = this.guardDescriptors(candidates.map((c) => c.descriptor));
-    if (guardError) return { ok: false, error: { ok: false, error: guardError } };
+    const { candidates, failures } = await this.resolveAll(providers, ref);
+    // Provider-output boundary (Req 6.1, 5.4, 5.5): a provider-produced descriptor must
+    // carry a valid, CONSISTENT identity AND fall under the producing provider's owned
+    // namespace BEFORE it enters FQID-keyed dedupe/resolution. The check is anchored on the
+    // ACTUAL producing provider id (`c.providerId` — the child id, Req 5.5), so it cannot be
+    // masked by aggregation. An invalid (malformed/partial/oversized/out-of-namespace)
+    // descriptor is rejected as a returned error — never admitted, never used as a dedupe
+    // key, never thrown.
+    for (const c of candidates) {
+      const error = this.outputValidator.validateDescriptor(c.providerId, c.descriptor);
+      if (error) return { ok: false, error: { ok: false, error } };
+    }
 
     // Conflict-aware dedupe (the EXISTING helper used by list/search): `deduped` keeps one
     // entry per FQID in provider-precedence order; `conflicts` names every FQID under which
@@ -418,17 +507,25 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
     return { ok: true, resolved: deduped[0] };
   }
 
-  private providerById(id: string): SkillProvider | undefined {
-    return this.providers.find((p) => p.id === id);
+  private providerById(providers: ReadonlyArray<SkillProvider>, id: string): SkillProvider | undefined {
+    return providers.find((p) => p.id === id);
   }
 
   // --- core capabilities ------------------------------------------------
 
   async read(input: ReadSkillInput): Promise<SkillResponse<SkillContent>> {
-    const r = await this.resolveOne(input.ref);
+    // ONE snapshot at entry (Req 10.2); threaded through every helper (Req 10.3).
+    return this.readFrom(this.view.providers(), input);
+  }
+
+  private async readFrom(
+    providers: ReadonlyArray<SkillProvider>,
+    input: ReadSkillInput,
+  ): Promise<SkillResponse<SkillContent>> {
+    const r = await this.resolveOne(providers, input.ref);
     if (!r.ok) return r.error;
 
-    const provider = this.providerById(r.resolved.providerId);
+    const provider = this.providerById(providers, r.resolved.providerId);
     if (!provider?.read) {
       return { ok: false, error: { code: 'unsupported', capability: 'read', provider: r.resolved.providerId } };
     }
@@ -452,10 +549,18 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   }
 
   async list(input?: ListSkillsInput): Promise<SkillResponse<SkillDescriptor[]>> {
+    // ONE snapshot at entry (Req 10.2); threaded through the aggregation (Req 10.3).
+    return this.listFrom(this.view.providers(), input);
+  }
+
+  private async listFrom(
+    providers: ReadonlyArray<SkillProvider>,
+    input?: ListSkillsInput,
+  ): Promise<SkillResponse<SkillDescriptor[]>> {
     // Supporting providers = those that DECLARE `capabilities.list` AND expose a `list`
     // method (Req 3.2: never invoke an operation a provider declares unsupported), after
     // applying the optional `input.provider` scope.
-    const supporting = this.providers
+    const supporting = providers
       .filter((p) => (input?.provider ? p.id === input.provider : true))
       .filter(
         (p): p is SkillProvider & Required<Pick<SkillProvider, 'list'>> =>
@@ -482,11 +587,13 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
       supporting.map(async (p) => {
         try {
           const resolved = await p.list!(input);
-          // Descriptor identity guard (Req 5.7, 1.5): a provider that emits a
-          // partial/empty/oversized/inconsistent descriptor is recorded as a `bad_request`
-          // source — its items are NOT admitted — preserving partial-failure resilience for
-          // the remaining well-formed providers (never thrown across the boundary).
-          const guardError = this.guardDescriptors(resolved.map((r) => r.descriptor));
+          // Provider-output boundary (Req 6.1, 6.2, 5.4, 5.5): a provider that emits a
+          // malformed/partial/oversized/out-of-namespace descriptor is recorded as a source
+          // error — its items are NOT admitted — preserving partial-failure resilience for
+          // the remaining well-formed providers (never thrown). Anchored on the producing
+          // provider id `p.id` (the child id), so the namespace check cannot be masked by
+          // aggregation.
+          const guardError = this.guardDescriptors(p.id, resolved.map((r) => r.descriptor));
           if (guardError) return { provider: p.id, error: guardError };
           return { provider: p.id, resolved };
         } catch (e) {
@@ -538,6 +645,14 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   }
 
   async search(input: SearchSkillsInput): Promise<SkillResponse<SearchResult[]>> {
+    // ONE snapshot at entry (Req 10.2); threaded through the aggregation (Req 10.3).
+    return this.searchFrom(this.view.providers(), input);
+  }
+
+  private async searchFrom(
+    providers: ReadonlyArray<SkillProvider>,
+    input: SearchSkillsInput,
+  ): Promise<SkillResponse<SearchResult[]>> {
     // Federated search (Task 15; design §4b — mirrors the `list()` aggregation exactly).
     //
     // Build the ordered set of CONTRIBUTORS in provider-precedence order. Each provider
@@ -551,7 +666,7 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
       | { kind: 'fallback'; provider: SkillProvider & Required<Pick<SkillProvider, 'list'>> };
 
     const contributors: Contributor[] = [];
-    for (const p of this.providers) {
+    for (const p of providers) {
       if (p.capabilities.search && p.search) {
         contributors.push({
           kind: 'native',
@@ -583,18 +698,20 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
         try {
           if (c.kind === 'native') {
             const results = await c.provider.search(input);
-            // Descriptor identity guard (Req 5.7, 1.5): native-search results carry
-            // provider-produced descriptors; reject a batch with any invalid identity as a
-            // `bad_request` source (items not admitted), preserving partial-failure resilience.
-            const guardError = this.guardDescriptors(results.map((r) => r.descriptor));
+            // Provider-output boundary (Req 6.1, 6.2, 5.4, 5.5): native-search results carry
+            // provider-produced descriptors; reject a batch with any invalid identity or
+            // out-of-namespace FQID as a source error (items not admitted), preserving
+            // partial-failure resilience. Anchored on the producing provider's child id.
+            const guardError = this.guardDescriptors(c.provider.id, results.map((r) => r.descriptor));
             if (guardError) return { provider: c.provider.id, error: guardError };
             return { provider: c.provider.id, results };
           }
           // Listable non-search provider → serve `search` over THAT provider's own
           // descriptors via list + substring match (Req 3.3, the documented fallback).
           const listed = await c.provider.list();
-          // Same descriptor identity guard before the fallback admits any descriptor.
-          const guardError = this.guardDescriptors(listed.map((r) => r.descriptor));
+          // Same provider-output boundary before the fallback admits any descriptor
+          // (identity + namespace, anchored on the producing provider's child id).
+          const guardError = this.guardDescriptors(c.provider.id, listed.map((r) => r.descriptor));
           if (guardError) return { provider: c.provider.id, error: guardError };
           const results: SearchResult[] = listed
             .filter((r) => r.descriptor.name.toLowerCase().includes(q))
@@ -662,9 +779,17 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   }
 
   async getReferences(input: GetReferencesInput): Promise<SkillResponse<ReferenceDescriptor[]>> {
-    const r = await this.resolveOne(input.ref);
+    // ONE snapshot at entry (Req 10.2); threaded through every helper (Req 10.3).
+    return this.getReferencesFrom(this.view.providers(), input);
+  }
+
+  private async getReferencesFrom(
+    providers: ReadonlyArray<SkillProvider>,
+    input: GetReferencesInput,
+  ): Promise<SkillResponse<ReferenceDescriptor[]>> {
+    const r = await this.resolveOne(providers, input.ref);
     if (!r.ok) return r.error;
-    const provider = this.providerById(r.resolved.providerId);
+    const provider = this.providerById(providers, r.resolved.providerId);
     if (!provider?.listReferences) {
       return {
         ok: false,
@@ -683,9 +808,17 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
   }
 
   async readReference(input: ReadReferenceInput): Promise<SkillResponse<ReferenceContent>> {
-    const r = await this.resolveOne(input.ref);
+    // ONE snapshot at entry (Req 10.2); threaded through every helper (Req 10.3).
+    return this.readReferenceFrom(this.view.providers(), input);
+  }
+
+  private async readReferenceFrom(
+    providers: ReadonlyArray<SkillProvider>,
+    input: ReadReferenceInput,
+  ): Promise<SkillResponse<ReferenceContent>> {
+    const r = await this.resolveOne(providers, input.ref);
     if (!r.ok) return r.error;
-    const provider = this.providerById(r.resolved.providerId);
+    const provider = this.providerById(providers, r.resolved.providerId);
     if (!provider?.readReference) {
       return {
         ok: false,
@@ -733,18 +866,32 @@ export class InProcessSkillsRuntime implements SkillsRuntime {
     capability: CapabilityRef<TInput, TOutput>,
     input: TInput,
   ): Promise<SkillResponse<TOutput>> {
+    // ONE snapshot at entry (Req 10.2): `request` captures the provider set once and threads
+    // it into the dispatched operation's `*From` helper, so a capability routed through
+    // `request` observes exactly the same single-snapshot discipline as a direct call and
+    // never double-reads the view (Req 10.3).
+    const providers = this.view.providers();
     switch (capability.method) {
       case SkillsCapabilities.read.method:
-        return this.read(input as ReadSkillInput) as Promise<SkillResponse<TOutput>>;
+        return this.readFrom(providers, input as ReadSkillInput) as Promise<SkillResponse<TOutput>>;
       case SkillsCapabilities.list.method:
-        return this.list(input as ListSkillsInput) as Promise<SkillResponse<TOutput>>;
+        return this.listFrom(providers, input as ListSkillsInput) as Promise<SkillResponse<TOutput>>;
       case SkillsCapabilities.search.method:
-        return this.search(input as SearchSkillsInput) as Promise<SkillResponse<TOutput>>;
+        return this.searchFrom(providers, input as SearchSkillsInput) as Promise<SkillResponse<TOutput>>;
       case SkillsCapabilities.listReferences.method:
-        return this.getReferences(input as GetReferencesInput) as Promise<SkillResponse<TOutput>>;
+        return this.getReferencesFrom(providers, input as GetReferencesInput) as Promise<SkillResponse<TOutput>>;
       case SkillsCapabilities.readReference.method:
-        return this.readReference(input as ReadReferenceInput) as Promise<SkillResponse<TOutput>>;
+        return this.readReferenceFrom(providers, input as ReadReferenceInput) as Promise<SkillResponse<TOutput>>;
       default:
+        // EXTENSION dispatch (Task 9.2): `skills.add.v1` is reached in-process through the
+        // SAME `request` seam the bus reaches it through the worker dispatch. Delegated to the
+        // optional admission handler (normalize → admit → map); when no handler is wired the
+        // capability is `unsupported`, exactly as before (backward-compatible).
+        if (this.admission && capability.method === AdmissionCapabilities.add.method) {
+          return this.admission.handle(input as RawProviderDescriptor) as Promise<
+            SkillResponse<TOutput>
+          >;
+        }
         return { ok: false, error: { code: 'unsupported', capability: capability.method } };
     }
   }

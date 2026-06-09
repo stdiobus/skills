@@ -56,7 +56,7 @@
  */
 
 import { z } from 'zod';
-import { SkillsCapabilities } from '../capabilities.js';
+import { AdmissionCapabilities, SkillsCapabilities } from '../capabilities.js';
 import { TRUSTED_MAX_CONTENT_BYTES } from '../trust.js';
 import type { CapabilityRef, SkillResponse, SkillRuntimeError } from '../contract.js';
 
@@ -113,6 +113,47 @@ export const ReadReferenceSchema = z.object({
   reference: z.string().min(1),
 });
 
+/**
+ * Schema for the `skills.add.v1` input — the RAW {@link RawProviderDescriptor} validated at
+ * the single bus boundary (Req 1.3; design §"Components" 7).
+ *
+ * This is the ONLY transport-boundary validation `skills.add.v1` gets, so it guarantees the
+ * IDENTITY-CRITICAL fields the admission pipeline relies on before it runs: `factoryId` and
+ * `namespace` are required non-empty strings (a blank `factoryId` could never resolve a
+ * blueprint; a blank `namespace` could never be claimed). The remaining fields are validated
+ * exactly as far as the boundary's responsibility extends:
+ *
+ * - `config` is intentionally `z.unknown()` — it is OPAQUE at this boundary and is validated
+ *   per-factory downstream by the blueprint's own `configSchema` (the `validate` stage). A
+ *   `z.unknown()` key is treated as OPTIONAL by zod and JSON cannot transmit `undefined`, so
+ *   an absent `config` arrives as `undefined`; that is acceptable here because the per-factory
+ *   schema (e.g. the HTTPS config schema) rejects a missing/invalid config as a `bad_request`
+ *   quarantine at `validate` — the boundary does not duplicate that per-factory check.
+ * - `trust` / `capabilityVersions` are OPTIONAL on the wire (Req 1.2): {@link normalizeDescriptor}
+ *   applies the least-privilege defaults once after decode. `trust` is validated as an object
+ *   with the required `TrustPolicy` core (`tier`, `maxContentBytes`, `isolateFetch`) so a
+ *   malformed trust object is rejected at the boundary rather than reaching normalization;
+ *   `.passthrough()` admits the optional `permittedRoot` and any forward-compatible field.
+ * - `.strict()` on the envelope rejects unknown top-level descriptor keys, so an injected
+ *   field cannot ride the boundary unnoticed.
+ */
+export const AddSkillSchema = z
+  .object({
+    factoryId: z.string().min(1),
+    config: z.unknown(),
+    namespace: z.string().min(1),
+    trust: z
+      .object({
+        tier: z.enum(['trusted', 'untrusted']),
+        maxContentBytes: z.number(),
+        isolateFetch: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
+    capabilityVersions: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
 /** Validation rule set for one capability method. */
 export interface CapabilitySchemas {
   /** Validates decoded params before any provider is invoked. */
@@ -130,6 +171,9 @@ export const CAPABILITY_SCHEMAS: Record<string, CapabilitySchemas> = {
   [SkillsCapabilities.search.method]: { input: SearchSkillsSchema },
   [SkillsCapabilities.listReferences.method]: { input: GetReferencesSchema },
   [SkillsCapabilities.readReference.method]: { input: ReadReferenceSchema },
+  // EXTENSION capability (Task 9.2): admission rides the single bus boundary like any other
+  // capability. The RAW descriptor is validated here, then normalized + admitted downstream.
+  [AdmissionCapabilities.add.method]: { input: AddSkillSchema },
 };
 
 // ---------------------------------------------------------------------------
@@ -191,6 +235,11 @@ export const KNOWN_ERROR_CODES = [
   'content_too_large',
   'isolation_failed',
   'aggregate_error',
+  // Admission quarantine envelope (Task 9.2). Required so the wire-response validator accepts
+  // a `skills.add.v1` quarantine as a structurally valid `SkillResponse`; the authoritative
+  // typed rejection stays inside `cause` (design §"Error Handling"). This is the single
+  // intentional sync point with the `SkillRuntimeError` union in `../contract.ts`.
+  'quarantined',
 ] as const;
 
 /**

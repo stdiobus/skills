@@ -29,10 +29,13 @@
  *   state unchanged.
  *
  * Dispatch (extension seam):
- *   A dispatch table keyed by the capability `method` strings (from `SkillsCapabilities`)
- *   replaces the former hand-written switch, so adding a capability does not require
- *   editing control flow here. Extension dispatch (`request` + capability descriptors)
- *   is layered on later; only the proven core capabilities are wired now.
+ *   A dispatch table keyed by the capability `method` strings (from `SkillsCapabilities`
+ *   and `AdmissionCapabilities`) replaces the former hand-written switch, so adding a
+ *   capability does not require editing control flow here. The five proven core capabilities
+ *   plus the `skills.add.v1` admission extension are wired (Task 9.2). `skills.add.v1`
+ *   normalizes the decoded RAW descriptor and admits it through the in-process
+ *   AdmissionController over the SAME provider view this worker's runtime reads from — NO new
+ *   worker pool and NO additional `StdioBus` are created.
  */
 
 import * as path from 'path';
@@ -40,8 +43,17 @@ import * as readline from 'readline';
 import { fileURLToPath } from 'url';
 import { InProcessSkillsRuntime } from '../in-process-runtime.js';
 import { FilesystemSkillProvider } from '../providers/filesystem-provider.js';
-import { SkillsCapabilities } from '../capabilities.js';
+import { HttpSkillProviderBlueprint } from '../providers/http-skill-provider.js';
+import { AdmissionCapabilities, SkillsCapabilities } from '../capabilities.js';
+import { MutableProviderView } from '../registry.js';
+import { AdmissionController } from '../admission/admission-controller.js';
+import { AdmissionCapabilityHandler } from '../admission/admission-capabilities.js';
+import { ProviderBlueprintRegistry } from '../admission/blueprint-registry.js';
+import { NamespaceOwnershipTable } from '../admission/namespace-ownership.js';
+import { OperationBudget } from '../admission/operation-budget.js';
+import { Sha256ContentHasher } from '../admission/content-hasher.js';
 import { ParamCodec } from './param-codec.js';
+import type { RawProviderDescriptor } from '../admission/provider-descriptor.js';
 import type {
   GetReferencesInput,
   ListSkillsInput,
@@ -56,18 +68,62 @@ import type {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, '..', '..', '..');
 
-const runtime = new InProcessSkillsRuntime([new FilesystemSkillProvider({ packageRoot })]);
+/**
+ * Default per-operation admission budget, in milliseconds (Task 9.2).
+ *
+ * Bounds the WHOLE admission pipeline (`discover → … → register`) under one linked signal,
+ * so a slow/unavailable external origin cannot hang the worker (Req 12.1). Interim/policy
+ * value, not frozen; the HTTPS provider also arms its own finite per-fetch timeout.
+ */
+const ADMISSION_BUDGET_MS = 30_000;
+
+// ─── Admission wiring — NO new worker, NO additional StdioBus (Task 9.2) ──────────────
+//
+// The admitted provider is materialized IN-PROCESS in this same worker's runtime. The
+// filesystem provider seeds a MutableProviderView; the runtime reads from THAT view, and the
+// AdmissionController's `register` stage admits (copy-on-write) into the SAME view — so an
+// admitted provider becomes visible to the next runtime operation with nothing new spawned.
+//
+// Baseline preservation (Req 15.1, 15.2): seeding a MutableProviderView with the single
+// filesystem provider yields the identical `providers()` snapshot a ConstantProviderView
+// would (same reference identity, same order), so the proven single-bundled-provider path is
+// byte-for-byte unchanged; the runtime already accepts any ProviderView.
+const fsProvider = new FilesystemSkillProvider({ packageRoot });
+const providerView = new MutableProviderView([fsProvider]);
+const namespaces = new NamespaceOwnershipTable();
+const runtime = new InProcessSkillsRuntime(providerView);
+
+// The single admission authority over the SAME view (no new pool/bus). The HTTPS blueprint is
+// the one external factory M-002 ships; the no-credential adapter is the default (public
+// origins). The runtime above and this controller share `providerView` and `namespaces`.
+const blueprints = new ProviderBlueprintRegistry();
+blueprints.register(new HttpSkillProviderBlueprint());
+const admissionController = new AdmissionController(
+  blueprints,
+  providerView,
+  namespaces,
+  new OperationBudget(ADMISSION_BUDGET_MS),
+  new Sha256ContentHasher(),
+);
+const admissionHandler = new AdmissionCapabilityHandler(admissionController);
 
 function log(msg: string): void {
   process.stderr.write(`[bus-worker] ${msg}\n`);
 }
 
 /**
- * Dispatch table over the proven core capabilities. Keyed by the SAME wire `method`
- * strings the bus carries (`skills.read.v1`, ...), tying each entry to its capability
- * descriptor rather than to a literal switch arm. Each handler receives the input that
- * {@link ParamCodec.decode} has already validated; the `unknown`→typed cast is sound
- * because decode parsed the value against that capability's schema.
+ * Dispatch table over the proven core capabilities PLUS the `skills.add.v1` extension
+ * (Task 9.2). Keyed by the SAME wire `method` strings the bus carries (`skills.read.v1`,
+ * `skills.add.v1`, ...), tying each entry to its capability descriptor rather than to a
+ * literal switch arm. Each handler receives the input that {@link ParamCodec.decode} has
+ * already validated; the `unknown`→typed cast is sound because decode parsed the value
+ * against that capability's schema.
+ *
+ * The `skills.add.v1` entry follows the design data-flow exactly: the decoded RAW descriptor
+ * is normalized and admitted via the {@link AdmissionCapabilityHandler} (normalize →
+ * `controller.admit` → `toSkillResponse`). It adds NO new worker pool and NO additional
+ * `StdioBus`; admission mutates the SAME in-process `providerView` this worker's runtime
+ * reads from, so a subsequently-admitted provider is reachable over this very transport.
  */
 const DISPATCH: Record<string, (input: unknown) => Promise<SkillResponse<unknown>>> = {
   [SkillsCapabilities.read.method]: (input) => runtime.read(input as ReadSkillInput),
@@ -77,6 +133,8 @@ const DISPATCH: Record<string, (input: unknown) => Promise<SkillResponse<unknown
     runtime.getReferences(input as GetReferencesInput),
   [SkillsCapabilities.readReference.method]: (input) =>
     runtime.readReference(input as ReadReferenceInput),
+  [AdmissionCapabilities.add.method]: (input) =>
+    admissionHandler.handle(input as RawProviderDescriptor),
 };
 
 /** Write a JSON-RPC result envelope to the protocol channel (stdout). */
