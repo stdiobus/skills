@@ -61,7 +61,9 @@ if (!packageRoot) {
 const bundled = new FilesystemSkillProvider({ search: true, packageRoot });
 const view = new MutableProviderView([bundled]);
 const namespaces = new NamespaceOwnershipTable();
-const runtime = new InProcessSkillsRuntime(view);
+// Mirror production: share the SAME namespace-ownership table with the runtime (3rd ctor arg)
+// so the per-operation anti-spoofing boundary (Req 5.4, 5.5) is live in this harness too.
+const runtime = new InProcessSkillsRuntime(view, undefined, namespaces);
 
 const blueprints = new ProviderBlueprintRegistry();
 blueprints.register(new HttpSkillProviderBlueprint());

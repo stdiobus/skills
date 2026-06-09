@@ -331,6 +331,40 @@ describe('AcquireStage (Req 7, 8.1)', () => {
     if (result.error.code !== 'provider_error') throw new Error('narrowing');
     expect(result.error.message).toContain('origin unavailable');
   });
+
+  it('rejects a multi-skill list with bad_request (single-skill scope, Req 7.1, 8.1)', async () => {
+    const stage = new AcquireStage();
+    const ctx = validated({ kind: 'ok', body: 'unused' });
+    // A provider whose list() returns more than one skill is out of the M-002 single-skill
+    // scope: it must be rejected, not silently first-picked.
+    const multiSkill: SkillProvider = {
+      id: 'acme',
+      capabilities: CAPS,
+      async resolve(): Promise<ResolvedSkill[]> {
+        return [];
+      },
+      async list(): Promise<ResolvedSkill[]> {
+        const one = makeContent('acme', 'doc-a').descriptor;
+        const two = makeContent('acme', 'doc-b').descriptor;
+        return [
+          { descriptor: one, providerId: 'acme', provenanceSeed: { source: one.source } },
+          { descriptor: two, providerId: 'acme', provenanceSeed: { source: two.source } },
+        ];
+      },
+      async read(resolved: ResolvedSkill): Promise<SkillContent> {
+        return { descriptor: resolved.descriptor, body: 'unused' };
+      },
+    };
+    const multiCtx: ValidateResult = { ...ctx, provider: multiSkill };
+
+    const result = await stage.run(multiCtx, NEVER_ABORTS);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected failure');
+    expect(result.error.code).toBe('bad_request');
+    if (result.error.code !== 'bad_request') throw new Error('narrowing');
+    expect(result.error.issues[0]).toContain('exactly one skill');
+  });
 });
 
 // =============================================================================

@@ -41,8 +41,9 @@
 import * as path from 'path';
 import * as readline from 'readline';
 import { fileURLToPath } from 'url';
-import { InProcessSkillsRuntime } from '../in-process-runtime.js';
+import { InProcessSkillsRuntime, type TrustLookup } from '../in-process-runtime.js';
 import { FilesystemSkillProvider } from '../providers/filesystem-provider.js';
+import { bundledTrustPolicy, UNTRUSTED_DEFAULT, type TrustPolicy } from '../trust.js';
 import { HttpSkillProviderBlueprint } from '../providers/http-skill-provider.js';
 import { AdmissionCapabilities, SkillsCapabilities } from '../capabilities.js';
 import { MutableProviderView } from '../registry.js';
@@ -79,6 +80,15 @@ const ADMISSION_BUDGET_MS = 30_000;
 
 // ─── Admission wiring — NO new worker, NO additional StdioBus (Task 9.2) ──────────────
 //
+// COMPOSITION ROOT (Task B5 audit; architecture §"no new singletons", Req 15.1/15.5):
+// the module-level `const`s below (view, namespace table, runtime, blueprint registry,
+// controller, handler) are this worker PROCESS's single composition root — wired exactly
+// once when the bus kernel spawns the worker and the module body runs. They are NOT a
+// singleton breach: none is `export`ed, no static accessor exposes them, and no other module
+// imports this entrypoint, so no instance is reachable as shared global mutable state. A
+// `buildBusWorkerRuntime()` factory is deliberately NOT introduced — there is no second
+// composition site and no global-state escape to abstract away.
+//
 // The admitted provider is materialized IN-PROCESS in this same worker's runtime. The
 // filesystem provider seeds a MutableProviderView; the runtime reads from THAT view, and the
 // AdmissionController's `register` stage admits (copy-on-write) into the SAME view — so an
@@ -91,7 +101,27 @@ const ADMISSION_BUDGET_MS = 30_000;
 const fsProvider = new FilesystemSkillProvider({ packageRoot });
 const providerView = new MutableProviderView([fsProvider]);
 const namespaces = new NamespaceOwnershipTable();
-const runtime = new InProcessSkillsRuntime(providerView);
+// Per-provider trust lookup (Task 9.2; design §9, Req 6.1/11.5) — the SAME pattern
+// `createRuntimeFromRegistry` builds: index each KNOWN provider's EFFECTIVE trust policy by
+// id, and resolve every unknown id to the least-privileged `UNTRUSTED_DEFAULT`. Wiring this
+// as the runtime's 2nd ctor arg makes the provider-output content-size boundary
+// (`ProviderOutputValidator.validateContentSize` → `checkContentSize` against the effective
+// `maxContentBytes`) LIVE on the post-admission read path: an admitted external provider
+// (whose id is its claimed namespace — never in this map) resolves to `UNTRUSTED_DEFAULT`, so
+// an oversized body it returns over the bus is rejected with `content_too_large` (returned,
+// never thrown). The bundled provider keeps its EFFECTIVE first-party policy
+// (`bundledTrustPolicy(packageRoot)` — same trust the registry composition and the
+// resource-scope proof register it with), so its baseline read/list/search is byte-for-byte
+// unchanged (Req 15.2). Keyed on `fsProvider.id` (not a literal) so the bundled entry can
+// never silently fall through to the untrusted default.
+const policyById = new Map<string, TrustPolicy>([[fsProvider.id, bundledTrustPolicy(packageRoot)]]);
+const trustOf: TrustLookup = (providerId) => policyById.get(providerId) ?? UNTRUSTED_DEFAULT;
+// Wire the SAME namespace-ownership table this worker's AdmissionController holds into the
+// runtime (3rd ctor arg), so the per-operation provider-output anti-spoofing boundary
+// (Req 5.4, 5.5) consults the same ownership source of truth as admission-time `claim`. The
+// bundled provider owns no namespace and stays EXEMPT, so the single-bundled-provider
+// baseline is byte-for-byte unchanged (Req 15.2).
+const runtime = new InProcessSkillsRuntime(providerView, trustOf, namespaces);
 
 // The single admission authority over the SAME view (no new pool/bus). The HTTPS blueprint is
 // the one external factory M-002 ships; the no-credential adapter is the default (public

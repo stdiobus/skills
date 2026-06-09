@@ -242,6 +242,15 @@ export class ValidateStage implements AdmissionStage<DiscoverResult, ValidateRes
  * the budget `signal`. An over-limit body surfaces as `content_too_large`; an unavailable
  * origin / abort / any other fault surfaces as `provider_error` — both via the provider's
  * own typed error, detected structurally so admission keeps no reverse dependency.
+ *
+ * ─── SINGLE-SKILL SCOPE (M-002; Req 7.1, 8.1) ──────────────────────────────────────
+ *
+ * M-002 admits EXACTLY ONE skill per HTTP provider. `acquire` therefore lists the provider's
+ * skills and acquires the single resolved skill. This single-skill contract is made explicit
+ * (not silently first-picked): a `list()` returning more than one skill is rejected with a
+ * typed `bad_request` rather than admitting only `resolvedSkills[0]` and dropping the rest (no
+ * silent placeholder — Req 2.2). A multi-skill provider is a deliberate future extension; this
+ * guard is the single place where that support would land.
  */
 export class AcquireStage implements AdmissionStage<ValidateResult, AcquireResult> {
   readonly name = 'acquire' as const;
@@ -272,6 +281,19 @@ export class AcquireStage implements AdmissionStage<ValidateResult, AcquireResul
           code: 'provider_error',
           provider: provider.id,
           message: 'provider returned no skills to acquire',
+        },
+      };
+    }
+    // Single-skill scope (M-002; Req 7.1, 8.1): admit exactly one skill per HTTP provider.
+    // Reject a multi-skill `list()` with a typed `bad_request` rather than silently first-picking.
+    if (resolvedSkills.length > 1) {
+      return {
+        ok: false,
+        error: {
+          code: 'bad_request',
+          issues: [
+            `provider '${provider.id}' returned ${resolvedSkills.length} skills; M-002 admits exactly one skill per HTTP provider`,
+          ],
         },
       };
     }

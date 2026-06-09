@@ -83,9 +83,12 @@ async function main() {
   );
   const admissionHandler = new AdmissionCapabilityHandler(controller);
 
-  // The runtime reads from the SAME view the admission `register` stage mutates, and is wired
-  // with the optional in-process admission seam so `request(skills.add.v1, ...)` is the real path.
-  const runtime = new InProcessSkillsRuntime(view, undefined, undefined, admissionHandler);
+  // The runtime reads from the SAME view the admission `register` stage mutates, shares the
+  // SAME namespace-ownership table the controller holds (3rd arg — so the per-operation
+  // anti-spoofing boundary, Req 5.4/5.5, consults the same source of truth as admission), and
+  // is wired with the optional in-process admission seam so `request(skills.add.v1, ...)` is
+  // the real path.
+  const runtime = new InProcessSkillsRuntime(view, undefined, namespaces, admissionHandler);
 
   const manifest = await resolver.readManifest();
   const publishedSkills = new Set(manifest.skills.map((s) => s.name));
