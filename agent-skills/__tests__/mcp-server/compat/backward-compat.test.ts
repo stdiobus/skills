@@ -58,11 +58,11 @@ const PUBLISHED_SKILL_2 = 'stdiobus-sdk-node';
 // -----------------------------------------------------------------------------
 
 /**
- * The five tool names mapped to their input parameter key sets.
- * This is the consumer-facing input contract; the rewrite may change the
- * validator (e.g. `z.enum` -> `z.string`) but MUST NOT change these keys.
+ * The five READ tool names mapped to their input parameter key sets — the FROZEN pre-migration
+ * surface. The rewrite may change a validator (e.g. `z.enum` -> `z.string`) but MUST NOT change
+ * these keys (Req 15.1).
  */
-const TOOL_PARAM_KEYS: Record<string, string[]> = {
+const READ_TOOL_PARAM_KEYS: Record<string, string[]> = {
   list_skills: [],
   read_skill: ['skill'],
   list_references: ['skill'],
@@ -70,6 +70,19 @@ const TOOL_PARAM_KEYS: Record<string, string[]> = {
   search_skills: ['query'],
 };
 
+/**
+ * The true DEFAULT tool surface: the five read tools PLUS the additive `admit_skill` tool
+ * promoted into production by Task 13.1 (Req 16.1, 16.8). `admit_skill` is ADDITIVE — its
+ * presence never alters the names, parameter key sets, or response shapes of the five read
+ * tools (Req 15.1). Its own input parameter key set is `{ factoryId, namespace, url,
+ * maxContentBytes?, timeoutMs? }` (Req 16.2); optional params still surface as schema properties.
+ */
+const TOOL_PARAM_KEYS: Record<string, string[]> = {
+  ...READ_TOOL_PARAM_KEYS,
+  admit_skill: ['factoryId', 'namespace', 'url', 'maxContentBytes', 'timeoutMs'],
+};
+
+const EXPECTED_READ_TOOL_NAMES = Object.keys(READ_TOOL_PARAM_KEYS).sort();
 const EXPECTED_TOOL_NAMES = Object.keys(TOOL_PARAM_KEYS).sort();
 
 /**
@@ -306,9 +319,14 @@ describe('backward-compat: MCP tool surface and response shapes (Req 9.1, 9.2, 9
     await client?.stop();
   });
 
-  it('exposes exactly the five pre-migration tool names', () => {
+  it('exposes the five pre-migration read tools unchanged, plus the additive admit_skill (Req 15.1, 16.1)', () => {
     const names = toolsList.result.tools.map((t: any) => t.name).sort();
+    // The true default surface is the six tools (five read tools + admit_skill).
     expect(names).toEqual(EXPECTED_TOOL_NAMES);
+    // The five read tools are ALL still present, names unchanged — admit_skill is purely additive.
+    for (const readTool of EXPECTED_READ_TOOL_NAMES) {
+      expect(names).toContain(readTool);
+    }
   });
 
   it('each tool retains its exact input parameter key set', () => {

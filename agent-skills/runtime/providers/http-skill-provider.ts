@@ -48,6 +48,7 @@ import type {
   ProviderBlueprint,
   ProviderCreationContext,
 } from '../admission/provider-blueprint.js';
+import { OriginAllowlist } from '../admission/origin-allowlist.js';
 import type { Schema, SchemaResult } from '../admission/schema.js';
 import type {
   ListSkillsInput,
@@ -420,16 +421,69 @@ export class HttpSkillProvider implements SkillProvider {
 }
 
 /**
+ * Compose the HTTPS-only {@link httpProviderConfigSchema} with an operator origin allowlist
+ * (Milestone-002, Task 13.2; design §"Components" 8; Req 16.5) — a pure schema-composition
+ * value helper (architecture standard §5).
+ *
+ * The result is an ADDITIVE guard, never a replacement: it runs the base schema FIRST
+ * (preserving HTTPS-only + bounds + unknown-key rejection unchanged) and, only on success,
+ * checks the validated `url`'s origin against the allowlist. A non-allowlisted origin becomes
+ * a `{ ok: false; issues }` — which the admission `validate` stage maps to a typed
+ * `bad_request` quarantine (`stage: 'validate'`) BEFORE the `acquire` stage performs any fetch.
+ *
+ * When the allowlist is UNSET ({@link OriginAllowlist.isConfigured} is `false`), this returns
+ * the base schema by REFERENCE: the default surface is byte-for-byte the pre-13.2 schema, so a
+ * server with no operator allowlist behaves exactly as before (public HTTPS permitted). The
+ * tool is unaffected either way — this only restricts which origins succeed, never whether the
+ * tool exists (Req 16.5).
+ */
+export function withOriginAllowlist(
+  base: Schema<HttpProviderConfig>,
+  allowlist: OriginAllowlist,
+): Schema<HttpProviderConfig> {
+  // Unset → identical to the default schema (same reference): no behaviour change (Req 16.5).
+  if (!allowlist.isConfigured) return base;
+
+  return {
+    parse(input: unknown): SchemaResult<HttpProviderConfig> {
+      const parsed = base.parse(input);
+      // Base schema rejection (non-HTTPS, missing bounds, unknown key) is preserved as-is —
+      // the allowlist never runs on an already-invalid config.
+      if (!parsed.ok) return parsed;
+      if (!allowlist.permits(parsed.value.url)) {
+        return {
+          ok: false,
+          issues: [
+            `url origin is not permitted by the operator origin allowlist: ${parsed.value.url}`,
+          ],
+        };
+      }
+      return parsed;
+    },
+  };
+}
+
+/**
  * The one sanctioned Abstract Factory for the `http` provider (Req 3.2; architecture §7).
  *
  * `id === 'http'` is the {@link ProviderDescriptor.factoryId} that selects this blueprint.
- * `configSchema` is the HTTPS-only {@link httpProviderConfigSchema}; `create` constructs an
- * in-process {@link HttpSkillProvider} from a VALIDATED config and the admission-resolved
+ * `configSchema` is the HTTPS-only {@link httpProviderConfigSchema}, OPTIONALLY composed with
+ * an operator {@link OriginAllowlist} (Req 16.5); `create` constructs an in-process
+ * {@link HttpSkillProvider} from a VALIDATED config and the admission-resolved
  * {@link ProviderCreationContext} (never the raw wire config).
+ *
+ * The OPTIONAL `allowlist` constructor argument defaults to {@link OriginAllowlist.unrestricted}
+ * so every existing caller (`new HttpSkillProviderBlueprint()`) keeps the default schema by
+ * reference — the allowlist is a deployment-time restriction the composition layer
+ * (`mcp-server.ts`) supplies from config/environment, never a change to the tool's presence.
  */
 export class HttpSkillProviderBlueprint implements ProviderBlueprint<HttpProviderConfig> {
   readonly id = 'http';
-  readonly configSchema: Schema<HttpProviderConfig> = httpProviderConfigSchema;
+  readonly configSchema: Schema<HttpProviderConfig>;
+
+  constructor(allowlist: OriginAllowlist = OriginAllowlist.unrestricted()) {
+    this.configSchema = withOriginAllowlist(httpProviderConfigSchema, allowlist);
+  }
 
   create(config: HttpProviderConfig, ctx: ProviderCreationContext): SkillProvider {
     return new HttpSkillProvider(config, ctx);

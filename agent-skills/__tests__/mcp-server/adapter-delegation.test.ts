@@ -76,11 +76,12 @@ import type {
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..', '..');
 const AGENT_SKILLS_DIR = path.join(PACKAGE_ROOT, 'agent-skills');
 const ADAPTER_SOURCE_PATH = path.join(AGENT_SKILLS_DIR, 'mcp-server.ts');
-// The delegate-only 5-tool wiring (open-world schema + `runtime.<op>(...)` delegation) was
-// extracted into the shared builder `lib/build-server.ts`, which BOTH the production
-// executable and the e2e federation harness construct the server through. Structural
-// assertions about tool wiring therefore target the builder; the production composition
-// (registry -> `createRuntimeFromRegistry`) is still asserted on `mcp-server.ts`.
+// The delegate-only 5-tool wiring (open-world schema + `runtime.<op>(...)` delegation) plus the
+// additive opt-in `admit_skill` tool live in the shared builder `lib/build-server.ts`, which BOTH
+// the production executable and the e2e federation harness construct the server through.
+// Structural assertions about tool wiring therefore target the builder; the production
+// composition (the admission-capable MutableProviderView + InProcessSkillsRuntime +
+// AdmissionController wiring — Task 13.1) is still asserted on `mcp-server.ts`.
 const BUILDER_SOURCE_PATH = path.join(AGENT_SKILLS_DIR, 'lib', 'build-server.ts');
 const MCP_SERVER_PATH = path.join(PACKAGE_ROOT, 'out', 'dist', 'mcp-server.mjs');
 
@@ -129,9 +130,16 @@ describe('adapter is delegate-only (structural — Req 9.4)', () => {
     expect(builderSource).toMatch(/runtime\.readReference\s*\(/);
   });
 
-  it('the adapter composes the runtime via createRuntimeFromRegistry (production composition)', () => {
-    // Production composition (registry -> transport-selected runtime) stays in the adapter.
-    expect(adapterSource).toMatch(/createRuntimeFromRegistry\s*\(/);
+  it('the adapter composes the admission-capable runtime in-process and delegates to the shared builder (production composition, Req 16.6)', () => {
+    // Task 13.1 promotes the production server to the SAME admission-capable composition the
+    // proven bus worker / e2e admit harness use: the bundled provider seeds a
+    // MutableProviderView shared by the InProcessSkillsRuntime AND the AdmissionController, so
+    // an admitted provider is materialized IN-PROCESS (no new bus/worker — Req 16.6) and is
+    // reachable through the `skills.add.v1` request seam wired as the runtime's admission handler.
+    expect(adapterSource).toMatch(/new MutableProviderView\s*\(/);
+    expect(adapterSource).toMatch(/new InProcessSkillsRuntime\s*\(/);
+    expect(adapterSource).toMatch(/new AdmissionController\s*\(/);
+    expect(adapterSource).toMatch(/new AdmissionCapabilityHandler\s*\(/);
     // And the adapter delegates to the shared builder rather than re-registering tools.
     expect(adapterSource).toMatch(/buildSkillsMcpServer\s*\(/);
   });

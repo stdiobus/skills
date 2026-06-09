@@ -90,30 +90,91 @@ import {
 } from './lib/tool-render.js';
 import { buildSkillsMcpServer } from './lib/build-server.js';
 import { FilesystemSkillProvider } from './runtime/providers/filesystem-provider.js';
-import { SkillProviderRegistry, createRuntimeFromRegistry } from './runtime/registry.js';
-import { bundledTrustPolicy } from './runtime/trust.js';
+import { HttpSkillProviderBlueprint } from './runtime/providers/http-skill-provider.js';
+import { MutableProviderView } from './runtime/registry.js';
+import { InProcessSkillsRuntime, type TrustLookup } from './runtime/in-process-runtime.js';
+import { AdmissionController } from './runtime/admission/admission-controller.js';
+import { AdmissionCapabilityHandler } from './runtime/admission/admission-capabilities.js';
+import { ProviderBlueprintRegistry } from './runtime/admission/blueprint-registry.js';
+import { NamespaceOwnershipTable } from './runtime/admission/namespace-ownership.js';
+import { OperationBudget } from './runtime/admission/operation-budget.js';
+import { Sha256ContentHasher } from './runtime/admission/content-hasher.js';
+import { OriginAllowlist, ORIGIN_ALLOWLIST_ENV } from './runtime/admission/origin-allowlist.js';
+import { bundledTrustPolicy, UNTRUSTED_DEFAULT, type TrustPolicy } from './runtime/trust.js';
+
+/**
+ * Default per-operation admission budget, in milliseconds (Task 13.1).
+ *
+ * Bounds the WHOLE `skills.add.v1` admission pipeline under one linked signal — the SAME value
+ * the production bus worker (`runtime/transport/bus-worker.ts`) and the proven e2e admit harness
+ * (`__tests__/e2e/harness/installed/mcp-admit-server.mjs`) arm, so the MCP and bus transports
+ * drive byte-identical admission. Interim/policy value, not frozen.
+ */
+const ADMISSION_BUDGET_MS = 30_000;
 
 async function main(): Promise<void> {
-  // Bundled provider + registry → transport-selected runtime (default in-process).
-  // The provider reuses the existing FileResolver, so published-name reads are
-  // byte-for-byte identical (Req 3.6, 9.2).
+  // ─── Admission-capable composition — in-process, NO new bus/worker (Req 16.6) ───────────
+  //
+  // Mirrors the proven bus-worker / e2e-harness wiring EXACTLY (no new admission logic): the
+  // bundled FilesystemSkillProvider seeds a MutableProviderView; the InProcessSkillsRuntime
+  // reads from THAT view, and the AdmissionController's `register` stage admits (copy-on-write)
+  // into the SAME view — so an admitted provider becomes visible to the next read-tool operation
+  // on this very instance (Req 16.3), with nothing new spawned. The provider reuses the existing
+  // FileResolver, so published-name reads stay byte-for-byte identical (Req 15.1, 15.2).
   const resolver = createFileResolver();
-  // Enable the bundled provider's NATIVE search so `runtime.search()` serves the keyword
-  // index (preserving published ranking) instead of the list+substring fallback (Req 9.4).
-  const provider = new FilesystemSkillProvider({ search: true });
-  // The bundled (first-party) provider registers as `trusted` (design §9, Req 11.1). The
-  // runtime's path-traversal boundary (Task 9.2/23, Req 11.4) enforces containment against
-  // the provider's DECLARED resource root (`resourceRoot` → the resolved skill's references
-  // directory), so it rejects any reference path that escapes that skill's references root —
-  // including a cross-skill path with no `..` — as a returned `out_of_bounds` error. The
-  // coarse `permittedRoot` = package root is retained only as a backstop for paths the
-  // provider does not scope. This is internal registration metadata only — it is not
-  // surfaced at MCP tool output, and valid published reference reads stay byte-for-byte
-  // identical.
-  const registry = new SkillProviderRegistry([
-    { provider, trust: bundledTrustPolicy(resolver.packageRoot) },
-  ]);
-  const runtime = createRuntimeFromRegistry({ kind: 'in-process' }, registry);
+  const packageRoot = resolver.packageRoot;
+  // Enable the bundled provider's NATIVE search so `runtime.search()` serves the keyword index
+  // (preserving published ranking) instead of the list+substring fallback (Req 9.4, 15.2).
+  const bundled = new FilesystemSkillProvider({ search: true });
+  const view = new MutableProviderView([bundled]);
+  const namespaces = new NamespaceOwnershipTable();
+
+  // Per-provider trust lookup — the SAME pattern `createRuntimeFromRegistry` (the prior
+  // composition) built: the bundled (first-party) provider keeps its EFFECTIVE
+  // `bundledTrustPolicy(packageRoot)` (so its read/list/search/reference baseline — incl. the
+  // path-traversal and content-size boundaries — is byte-for-byte unchanged), and any unknown id
+  // (an admitted external provider, whose id is its claimed namespace) resolves to the
+  // least-privileged `UNTRUSTED_DEFAULT`. Keyed on `bundled.id`, never a literal.
+  const policyById = new Map<string, TrustPolicy>([[bundled.id, bundledTrustPolicy(packageRoot)]]);
+  const trustOf: TrustLookup = (providerId) => policyById.get(providerId) ?? UNTRUSTED_DEFAULT;
+
+  // The single admission authority over the SAME view + namespace table (Req 16.6, B1/B3 wiring).
+  // The HTTPS blueprint is the one external factory M-002 ships; the no-credential adapter is the
+  // default (public origins). Bundled `OperationBudget` + `Sha256ContentHasher`, exactly as the
+  // bus worker composes them.
+  //
+  // ─── Operator origin allowlist (Req 16.5) ────────────────────────────────────────────
+  // OPTIONAL deployment restriction sourced from the environment (`ORIGIN_ALLOWLIST_ENV`). WHERE
+  // set, only the HTTPS origins it lists are admissible — a non-allowlisted `url` is quarantined
+  // at the admission `validate` stage (typed `bad_request`) BEFORE any fetch, because the
+  // allowlist is composed into the HTTP blueprint's `configSchema` (the `validate` stage runs
+  // `configSchema.parse`). WHERE unset, the documented default applies (public HTTPS permitted,
+  // governed by the existing untrusted/bounded/content-as-data/namespace controls). This is a
+  // RESTRICTION on which origins succeed, never a hidden on/off — `admit_skill` is always
+  // registered (below), the allowlist only narrows its admissible origins.
+  const originAllowlist = OriginAllowlist.fromEnv();
+  const blueprints = new ProviderBlueprintRegistry();
+  blueprints.register(new HttpSkillProviderBlueprint(originAllowlist));
+  if (originAllowlist.isConfigured) {
+    process.stderr.write(
+      `operator origin allowlist ENABLED via ${ORIGIN_ALLOWLIST_ENV} ` +
+      `(${originAllowlist.permittedOrigins().length} HTTPS origin(s) admissible)\n`,
+    );
+  }
+  const admissionController = new AdmissionController(
+    blueprints,
+    view,
+    namespaces,
+    new OperationBudget(ADMISSION_BUDGET_MS),
+    new Sha256ContentHasher(),
+  );
+  const admissionHandler = new AdmissionCapabilityHandler(admissionController);
+
+  // The runtime reads from the SAME view the `register` stage mutates, shares the SAME
+  // namespace-ownership table the controller holds (so the per-operation anti-spoofing boundary
+  // consults the same source of truth as admission-time `claim`), and is wired with the
+  // in-process admission seam so `request(skills.add.v1, …)` is the real production path.
+  const runtime = new InProcessSkillsRuntime(view, trustOf, namespaces, admissionHandler);
 
   // The published manifest registry document (rendered by `list_skills`) is read from the
   // manifest source: it is the published document template whose per-entry metadata
@@ -138,8 +199,9 @@ async function main(): Promise<void> {
     );
   }
 
-  // Build the 5-tool server through the SHARED builder so production and the e2e
-  // federation harness exercise the SAME real wiring (no parallel re-implementation).
+  // Build the server through the SHARED builder so production and the e2e harnesses exercise
+  // the SAME real wiring. `admitSkill: true` registers the additive sixth tool (Req 16.1) over
+  // the admission-capable runtime composed above — the five read tools are unchanged (Req 15.1).
   const server = buildSkillsMcpServer({
     name: '@stdiobus/skills',
     version: manifest.version,
@@ -147,6 +209,7 @@ async function main(): Promise<void> {
     manifest,
     publishedSkills,
     renderOpts,
+    admitSkill: true,
   });
 
   // --- Connect transport ---

@@ -58,7 +58,12 @@
  */
 
 import * as path from 'path';
-import StdioBus from '@stdiobus/node';
+// NAMED import: `@stdiobus/node` (v2.x) exports `StdioBus` as a NAMED export with no default
+// export. A DEFAULT import works under ts-jest's CJS esModuleInterop but, in the esbuild ESM
+// bundle (`out/dist/runtime.mjs`), resolves to the module NAMESPACE object — so `new StdioBus()`
+// throws "StdioBus is not a constructor" in the installed package, breaking createDefaultBus.
+// The named import is correct in both the CJS test transform and the shipped ESM bundle.
+import { StdioBus } from '@stdiobus/node';
 import { CORE_CAPABILITIES, SkillsCapabilities } from '../capabilities.js';
 import { ParamCodec } from './param-codec.js';
 import type {
@@ -90,23 +95,39 @@ export interface BusRuntimeConfig {
 }
 
 /**
- * Construct the INTERIM default bus that spawns the promoted skills worker.
+ * Construct the default bus that spawns the BUNDLED skills worker from the INSTALLED
+ * package (Task B6.2; Req 14.2, 15.5).
  *
- * The worker is a `tsx`-run TypeScript process, so this default targets a dev/tsx context
- * and resolves the worker + the `tsx` binary relative to `process.cwd()` (the package
- * root, where `yarn`/`tsx`/Jest run). This intentionally avoids `import.meta`/`__dirname`
- * so the module compiles identically under the ESM build and the CommonJS test transform.
+ * The worker ships as `out/dist/bus-worker.mjs` (Task B6.1) and is a SIBLING of this
+ * runtime bundle (`out/dist/runtime.mjs`) — both are esbuild outputs in `out/dist/`. So the
+ * worker is resolved RELATIVE TO THIS BUNDLE via `path.join(__dirname, 'bus-worker.mjs')`,
+ * and run with the SAME Node that is already executing (`process.execPath`). This is the
+ * "where is the worker executable next to this runtime bundle?" question — distinct from
+ * `createFileResolver`, which answers "where are the packaged skill assets?".
  *
- * INTERIM: this is a convenience default only. Any non-dev deployment should inject a
- * pre-configured, caller-owned {@link StdioBus} (the second constructor argument), which
- * bypasses this path entirely and lets the caller own the bus topology and lifecycle.
+ * Crucially this does NOT use `process.cwd()` (a clean consumer's cwd is arbitrary), the
+ * dev-only `tsx` binary (a devDependency, absent in an installed package), or the `.ts`
+ * source (excluded from the published tarball) — those made the bus dev/repo-only.
+ *
+ * On `__dirname` and the dual compile target: this module is also compiled under the
+ * ts-jest CommonJS transform (`module: commonjs`), where raw `import.meta.url` is a
+ * compile-time error (TS1343). `__dirname` is therefore used instead — it is native under
+ * CommonJS and is reconstructed from `import.meta.url` by esbuild's shared ESM banner in
+ * every bundle that reaches this code (`out/dist/runtime.mjs`, like the MCP server and the
+ * bus worker). Tests inject their own caller-owned bus (the 2nd constructor argument) and
+ * never hit this path, so the bundle-relative resolution only runs in the real package; a
+ * dev/repo run that does reach it resolves a non-existent source-relative `.mjs`, whose
+ * spawn failure maps to the SAME returned `provider_error`/`bus:<pool>` transport result
+ * (never a throw) — i.e. it degrades gracefully, it does not crash.
+ *
+ * Any deployment that owns its bus topology should still inject a pre-configured,
+ * caller-owned {@link StdioBus} (the second constructor argument), which bypasses this path
+ * entirely and lets the caller own the bus lifecycle.
  */
 function createDefaultBus(pool: string): StdioBus {
-  const root = process.cwd();
-  const tsxBin = path.join(root, 'node_modules', '.bin', 'tsx');
-  const workerPath = path.join(root, 'agent-skills', 'runtime', 'transport', 'bus-worker.ts');
+  const workerPath = path.join(__dirname, 'bus-worker.mjs');
   return new StdioBus({
-    config: { pools: [{ id: pool, command: tsxBin, args: [workerPath], instances: 1 }] },
+    config: { pools: [{ id: pool, command: process.execPath, args: [workerPath], instances: 1 }] },
     backend: 'native',
     logLevel: 2, // WARN — keep kernel chatter low
   });

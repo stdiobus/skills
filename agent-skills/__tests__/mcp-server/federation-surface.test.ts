@@ -17,9 +17,9 @@
 //
 //   1. list: a multi-provider runtime aggregates bundled + an external provider;
 //      runtime.list() carries per-source aggregate diagnostics for BOTH providers,
-//      and presentManifest renders the published (bundled) document (federated
-//      names are not representable in the published manifest-document shape during
-//      the compatibility phase, so they are excluded — Req 9.8).
+//      and presentManifest surfaces the admitted federated skill as a synthesized
+//      honest entry (provider-boundary Req 16.3) while keeping the bundled set
+//      byte-stable (Req 15.2).
 //   2. search: a non-bundled provider's NATIVE search is reachable through
 //      presentSearch — its results appear in the published search output, proving
 //      federation reaches the product surface (Req 9.4, 9.1).
@@ -130,7 +130,7 @@ describe('list_skills is federation-capable through the runtime (Req 9.4, 4.5)',
     expect(diag!.sources.every((s) => s.ok)).toBe(true);
   });
 
-  it('presentManifest renders the published document; federated names excluded (compat phase, Req 9.8)', async () => {
+  it('presentManifest surfaces an admitted federated skill as a synthesized entry (provider-boundary Req 16.3)', async () => {
     const resolver = createFileResolver();
     const registry = new SkillProviderRegistry([
       { provider: new FilesystemSkillProvider({ search: true }), trust: bundledTrustPolicy(resolver.packageRoot) },
@@ -139,9 +139,14 @@ describe('list_skills is federation-capable through the runtime (Req 9.4, 4.5)',
     const runtime = createRuntimeFromRegistry({ kind: 'in-process' }, registry);
 
     const doc = JSON.parse(presentManifest(await runtime.list(), manifest).content[0].text) as SkillManifest;
-    // Published document is byte-stable: exactly the manifest skills, external name excluded.
-    expect(doc.skills.some((s) => s.name === 'acme-remote-skill')).toBe(false);
-    expect(doc.skills.map((s) => s.name).sort()).toEqual(manifest.skills.map((s) => s.name).sort());
+    // Req 16.3: the federated skill is now DISCOVERABLE via list_skills (surfaced, not dropped),
+    // rendered as a synthesized honest entry that names its provider and is marked 'admitted'.
+    const acme = doc.skills.find((s) => s.name === 'acme-remote-skill');
+    expect(acme).toBeDefined();
+    expect(acme!.status).toBe('admitted');
+    // ...and every bundled manifest skill is still present (bundled set unchanged, Req 15.2).
+    const bundledNames = doc.skills.filter((s) => s.status !== 'admitted').map((s) => s.name).sort();
+    expect(bundledNames).toEqual(manifest.skills.map((s) => s.name).sort());
   });
 });
 

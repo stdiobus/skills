@@ -38,9 +38,8 @@
  *   worker pool and NO additional `StdioBus` are created.
  */
 
-import * as path from 'path';
 import * as readline from 'readline';
-import { fileURLToPath } from 'url';
+import { createFileResolver } from '../../lib/file-resolver.js';
 import { InProcessSkillsRuntime, type TrustLookup } from '../in-process-runtime.js';
 import { FilesystemSkillProvider } from '../providers/filesystem-provider.js';
 import { bundledTrustPolicy, UNTRUSTED_DEFAULT, type TrustPolicy } from '../trust.js';
@@ -64,10 +63,14 @@ import type {
   SkillResponse,
 } from '../contract.js';
 
-// transport/ sits at the same depth as __spike__/ under runtime/, so the package root
-// is still three levels up (transport -> runtime -> agent-skills -> packageRoot).
-const here = path.dirname(fileURLToPath(import.meta.url));
-const packageRoot = path.resolve(here, '..', '..', '..');
+// packageRoot resolution — reuse the EXACT bundled-layout resolution the MCP server uses
+// (`createFileResolver`, which resolves `path.resolve(__dirname, '..', '..')`). This is
+// correct from BOTH execution locations the worker now has, with no hardcoded offset:
+//   - bundled at `out/dist/bus-worker.mjs`  → `__dirname` = out/dist → root is 2 up;
+//   - dev/tsx source at `agent-skills/runtime/transport/bus-worker.ts` → `createFileResolver`
+//     runs in `agent-skills/lib/file-resolver.ts`, whose `__dirname` is also 2 up from root.
+// In the ESM bundle `__dirname` is supplied by the esbuild banner (see esbuild.config.mjs).
+const packageRoot = createFileResolver().packageRoot;
 
 /**
  * Default per-operation admission budget, in milliseconds (Task 9.2).

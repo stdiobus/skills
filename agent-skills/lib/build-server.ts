@@ -29,6 +29,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
+  describeError,
   renderListReferences,
   renderReadReference,
   renderReadSkill,
@@ -39,6 +40,21 @@ import { presentManifest } from './manifest-presenter.js';
 import { presentSearch } from './search-presenter.js';
 import type { SkillManifest } from '../types.js';
 import type { SkillsRuntime } from '../runtime/contract.js';
+import { AdmissionCapabilities } from '../runtime/capabilities.js';
+
+/**
+ * Default `maxContentBytes` for an {@link buildSkillsMcpServer} `admit_skill` call that omits
+ * it — the same interim bound the proven e2e admit harness (`mcp-admit-server.mjs`) uses. It is
+ * a per-acquisition size ceiling, not a security gate (the untrusted/bounded/namespace controls
+ * still apply); changeable in one place (design §"Settled vs interim").
+ */
+const DEFAULT_ADMIT_MAX_CONTENT_BYTES = 1_000_000;
+
+/**
+ * Default per-operation `timeoutMs` for an `admit_skill` call that omits it — matches the
+ * admission budget the production bus worker and the proven harness arm (30s). Interim/policy.
+ */
+const DEFAULT_ADMIT_TIMEOUT_MS = 30_000;
 
 /**
  * Open-world skill-name schema (Req 1.6, 9.1, 9.6).
@@ -80,6 +96,20 @@ export interface BuildSkillsMcpServerOptions {
   publishedSkills: ReadonlySet<string>;
   /** Render options (staged provenance exposure). Compat default is `{ exposeProvenance: false }`. */
   renderOpts: AdapterRenderOptions;
+  /**
+   * Opt-in: register the additive `admit_skill` tool alongside the five read tools (Req 16.1).
+   *
+   * Defaults to `false` so every existing caller of this builder (e.g. the e2e federated
+   * harness) keeps the EXACTLY-five-tool surface byte-for-byte. The production executable
+   * (`mcp-server.ts`) sets it `true` once it has composed an admission-capable `runtime` (a
+   * `runtime` whose `request(skills.add.v1, …)` seam is wired to an `AdmissionController`).
+   *
+   * The tool holds NO admission logic (Req 16.2): it builds the wire `RawProviderDescriptor`
+   * and delegates to `runtime.request(AdmissionCapabilities.add, raw)` — the single production
+   * `skills.add.v1` path. Enabling it NEVER alters the names, schemas, or behavior of the five
+   * read tools (Req 15.1).
+   */
+  admitSkill?: boolean;
 }
 
 /**
@@ -96,7 +126,6 @@ export interface BuildSkillsMcpServerOptions {
  */
 export function buildSkillsMcpServer(opts: BuildSkillsMcpServerOptions): McpServer {
   const { name, version, runtime, manifest, publishedSkills, renderOpts } = opts;
-
   const server = new McpServer({ name, version }, { capabilities: { tools: {} } });
 
   // list_skills: delegate to the runtime; render the AUTHORITATIVE descriptor list back
@@ -191,6 +220,49 @@ export function buildSkillsMcpServer(opts: BuildSkillsMcpServerOptions): McpServ
       return presentSearch(await runtime.search({ query: args.query }));
     },
   );
+
+  // admit_skill (Req 16.1–16.4): OPT-IN additive sixth tool — registered ONLY when the caller
+  // composed an admission-capable runtime and set `admitSkill: true`. Never alters the five
+  // read tools above (Req 15.1). This is the SAME thin shim the e2e harness `mcp-admit-server.mjs`
+  // proved, promoted into the shared builder: it holds NO admission logic (Req 16.2) — it builds
+  // the wire RawProviderDescriptor and delegates to the single production `skills.add.v1` path via
+  // the `request` seam (`AdmissionCapabilities.add` → `AdmissionCapabilityHandler` →
+  // `AdmissionController`). Success renders the admitted identity + record-only contentHash;
+  // a quarantine renders `describeError(cause)` as an MCP tool error (`isError: true`), never
+  // throwing across the tool boundary (Req 16.4, 9.1).
+  if (opts.admitSkill) {
+    server.registerTool(
+      'admit_skill',
+      {
+        description: 'Admit an external skill provider over HTTPS via the production skills.add.v1 path',
+        inputSchema: {
+          factoryId: z.string().min(1),
+          namespace: z.string().min(1),
+          url: z.string().min(1),
+          maxContentBytes: z.number().optional(),
+          timeoutMs: z.number().optional(),
+        },
+      },
+      async (args): Promise<ToolResult> => {
+        // Build the RAW wire descriptor (trust / capabilityVersions omitted → normalized to the
+        // least-privilege defaults at the decode boundary inside the handler) and delegate to the
+        // SAME `request` seam the bus worker reaches admission through. No admission logic here.
+        const raw = {
+          factoryId: args.factoryId,
+          namespace: args.namespace,
+          config: {
+            url: args.url,
+            maxContentBytes: args.maxContentBytes ?? DEFAULT_ADMIT_MAX_CONTENT_BYTES,
+            timeoutMs: args.timeoutMs ?? DEFAULT_ADMIT_TIMEOUT_MS,
+          },
+        };
+        const resp = await runtime.request(AdmissionCapabilities.add, raw);
+        return resp.ok
+          ? { content: [{ type: 'text', text: JSON.stringify(resp.data) }] }
+          : { content: [{ type: 'text', text: describeError(resp.error) }], isError: true };
+      },
+    );
+  }
 
   return server;
 }

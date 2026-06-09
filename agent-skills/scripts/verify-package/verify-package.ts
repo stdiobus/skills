@@ -29,6 +29,31 @@ import * as os from 'os';
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..', '..');
 const TIMEOUT = 60_000;
 const MCP_TIMEOUT = 15_000;
+/** Admission over real HTTPS can exceed the default MCP timeout; give it a wider budget. */
+const ADMIT_TIMEOUT = 60_000;
+
+// ─── Provider-boundary (admit_skill) live verification constants ────────────────────
+//
+// A REAL, pinned, immutable public HTTPS document (git's COPYING — the same origin the live
+// E2E uses). NO localhost, NO fixture, NO fallback: if the origin is unavailable this check
+// FAILS HONESTLY rather than degrading to a substitute (milestone §10 no-fallback DoD).
+const ADMIT_HTTPS_URL = 'https://raw.githubusercontent.com/git/git/v2.43.0/COPYING';
+/** The skill name the HTTPS provider mints from the URL basename. */
+const ADMIT_SKILL_NAME = 'copying';
+/** A stable substring of the real fetched body (git's COPYING is GPLv2), proving real acquisition. */
+const ADMIT_BODY_MARKER = 'GNU GENERAL PUBLIC LICENSE';
+
+// ─── stdio Bus transport verification constants (Task B6.3; Req 14.1, 14.2) ─────────
+//
+// The bundled stdio Bus worker (`out/dist/bus-worker.mjs`, shipped by Task B6.1) is the
+// SAME binary `createDefaultBus` spawns in production. verify-package stands it up the way
+// the native bus kernel does — `node out/dist/bus-worker.mjs` speaking NDJSON JSON-RPC 2.0
+// over stdin/stdout — with NO `--packageRoot` arg, proving the worker self-resolves its
+// packageRoot from the installed bundle (B6.1) and serves the bundled skills byte-for-byte.
+/** A bundled skill read over the bus and asserted byte-for-byte against its on-disk SKILL.md. */
+const BUS_BUNDLED_SKILL = 'runtime-concepts';
+/** The capability wire method the bus round-trip exercises. */
+const M_READ = 'skills.read.v1';
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -114,13 +139,13 @@ class McpClient {
     }
   }
 
-  send(method: string, params?: any): Promise<any> {
+  send(method: string, params?: any, timeoutMs: number = MCP_TIMEOUT): Promise<any> {
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`Timeout waiting for response to ${method} (id=${id})`));
-      }, MCP_TIMEOUT);
+      }, timeoutMs);
       this.pending.set(id, {
         resolve: (v) => { clearTimeout(timer); resolve(v); },
         reject: (e) => { clearTimeout(timer); reject(e); },
@@ -139,6 +164,82 @@ class McpClient {
     // Send initialized notification (no id, no response expected)
     this.proc.stdin!.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
     return resp;
+  }
+
+  async close(): Promise<void> {
+    this.proc.stdin!.end();
+    return new Promise((resolve) => {
+      this.proc.on('close', () => resolve());
+      setTimeout(() => { this.proc.kill(); resolve(); }, 3000);
+    });
+  }
+}
+
+/**
+ * Minimal NDJSON JSON-RPC client for the bundled stdio Bus worker (Task B6.3).
+ *
+ * The production bus worker speaks RAW JSON-RPC 2.0 capability calls over stdin/stdout (NOT
+ * the MCP `initialize` handshake), so this client is deliberately simpler than {@link McpClient}:
+ * it spawns `node out/dist/bus-worker.mjs`, writes one `{ jsonrpc, id, method, params }` per
+ * call, and resolves with the worker's `result` (a typed SkillResponse), correlated by id. Here
+ * the verify-package process plays the exact role the native stdio Bus kernel plays in
+ * production — it drives the SHIPPED worker line-by-line. Every spawned worker MUST be closed.
+ */
+class BusClient {
+  private proc: ChildProcess;
+  private buffer = '';
+  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  private nextId = 1;
+
+  constructor(workerPath: string, cwd: string) {
+    // Spawn with the SAME Node already running and NO `--packageRoot` arg: the bundled worker
+    // resolves its packageRoot from `out/dist/` itself (B6.1). cwd is the clean consumer.
+    this.proc = spawn('node', [workerPath], {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env },
+    });
+    this.proc.stdout!.on('data', (chunk: Buffer) => {
+      this.buffer += chunk.toString('utf-8');
+      this.drain();
+    });
+  }
+
+  private drain(): void {
+    const lines = this.buffer.split('\n');
+    this.buffer = lines.pop()!;
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const msg = JSON.parse(line);
+        if (msg.id != null && this.pending.has(msg.id)) {
+          const p = this.pending.get(msg.id)!;
+          this.pending.delete(msg.id);
+          // The worker wraps a typed SkillResponse in `result`; a transport-level JSON-RPC
+          // `error` (the worker's last-resort catch) is surfaced as a rejection.
+          if (msg.error !== undefined && msg.result === undefined) {
+            p.reject(new Error(`worker transport error: ${JSON.stringify(msg.error)}`));
+          } else {
+            p.resolve(msg.result);
+          }
+        }
+      } catch { /* ignore non-JSON lines */ }
+    }
+  }
+
+  request<T = any>(method: string, params: any, timeoutMs: number = MCP_TIMEOUT): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const id = this.nextId++;
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Timeout waiting for response to ${method} (id=${id})`));
+      }, timeoutMs);
+      this.pending.set(id, {
+        resolve: (v) => { clearTimeout(timer); resolve(v); },
+        reject: (e) => { clearTimeout(timer); reject(e); },
+      });
+      this.proc.stdin!.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    });
   }
 
   async close(): Promise<void> {
@@ -197,6 +298,11 @@ async function main(): Promise<void> {
 
     check('MCP server bundle exists (mcp-server.mjs)', () => {
       assert(fs.existsSync(path.join(pkgDir, 'out', 'dist', 'mcp-server.mjs')), 'mcp-server.mjs missing');
+    });
+
+    check('stdio Bus worker bundle exists (bus-worker.mjs)', () => {
+      // Shipped by Task B6.1 via the `out/dist/**/*.mjs` files glob; spawned by createDefaultBus.
+      assert(fs.existsSync(path.join(pkgDir, 'out', 'dist', 'bus-worker.mjs')), 'bus-worker.mjs missing');
     });
 
     check('MCP server has shebang', () => {
@@ -340,13 +446,18 @@ async function main(): Promise<void> {
         assert(resp.result.capabilities?.tools != null, 'Missing tools capability');
       });
 
-      await checkAsync('tools/list returns 5 tools', async () => {
+      await checkAsync('tools/list returns 6 tools (five read tools + admit_skill)', async () => {
         const resp = await client!.send('tools/list');
         assert(resp.result?.tools != null, 'No tools in response');
         const names = resp.result.tools.map((t: any) => t.name).sort();
-        assert(names.length === 5, `Expected 5 tools, got ${names.length}`);
-        const expected = ['list_references', 'list_skills', 'read_reference', 'read_skill', 'search_skills'];
+        assert(names.length === 6, `Expected 6 tools, got ${names.length}`);
+        // The true default surface: the five read tools PLUS the additive admit_skill (Req 16.1, 16.8).
+        const expected = ['admit_skill', 'list_references', 'list_skills', 'read_reference', 'read_skill', 'search_skills'];
         assert(JSON.stringify(names) === JSON.stringify(expected), `Unexpected tools: ${names.join(', ')}`);
+        // The five read tools stay byte-for-byte present — admit_skill is purely additive (Req 15.1).
+        for (const readTool of ['list_references', 'list_skills', 'read_reference', 'read_skill', 'search_skills']) {
+          assert(names.includes(readTool), `Missing read tool: ${readTool}`);
+        }
       });
 
       await checkAsync('list_skills returns 17 skills with layers', async () => {
@@ -428,11 +539,110 @@ async function main(): Promise<void> {
         assert(resp.result?.isError === true, 'Invalid skill name was not rejected');
       });
 
+      // ─── Provider boundary: admit_skill end-to-end over the INSTALLED server ──────────
+      //
+      // The core M-002 capability, verified the way a real consumer experiences it: an agent
+      // admits an EXTERNAL provider over REAL HTTPS through the shipped admit_skill tool, then
+      // reads the fetched skill back on the SAME running instance (per-operation snapshot
+      // visibility). This is a permanent regression gate — NOT a one-off probe. No mocks, no
+      // fallback (Req 16.1–16.4, 16.8).
+
+      let admittedContentHash = '';
+
+      await checkAsync('admit_skill admits an external provider over real HTTPS (Req 16.1, 16.2)', async () => {
+        const resp = await client!.send(
+          'tools/call',
+          { name: 'admit_skill', arguments: { factoryId: 'http', namespace: 'external', url: ADMIT_HTTPS_URL } },
+          ADMIT_TIMEOUT,
+        );
+        assert(resp.result?.isError !== true, `admit_skill returned an error: ${resp.result?.content?.[0]?.text}`);
+        const payload = JSON.parse(resp.result.content[0].text);
+        assert(payload.descriptor?.name === ADMIT_SKILL_NAME, `Unexpected admitted name: ${payload.descriptor?.name}`);
+        assert(payload.descriptor?.provider === 'external', `Unexpected provider: ${payload.descriptor?.provider}`);
+        // Record-only content hash is present on the admitted-provider success payload (Req 8.2, 16.3).
+        assert(typeof payload.contentHash === 'string' && payload.contentHash.length > 0, 'Missing contentHash');
+        admittedContentHash = payload.contentHash;
+      });
+
+      await checkAsync('admitted skill is immediately readable on the SAME instance (Req 16.3)', async () => {
+        const resp = await client!.send(
+          'tools/call',
+          { name: 'read_skill', arguments: { skill: ADMIT_SKILL_NAME } },
+          ADMIT_TIMEOUT,
+        );
+        assert(resp.result?.isError !== true, `read_skill(admitted) errored: ${resp.result?.content?.[0]?.text}`);
+        const body: string = resp.result.content[0].text;
+        // The body is the REAL document fetched over HTTPS, served from the same pool.
+        assert(body.includes(ADMIT_BODY_MARKER), `Admitted body missing marker "${ADMIT_BODY_MARKER}"`);
+      });
+
+      await checkAsync('admitted skill is federated into list_skills on the SAME instance (Req 16.3)', async () => {
+        const resp = await client!.send('tools/call', { name: 'list_skills', arguments: {} });
+        const manifest = JSON.parse(resp.result.content[0].text);
+        const names = manifest.skills.map((s: any) => s.name);
+        assert(names.includes(ADMIT_SKILL_NAME), `Admitted skill "${ADMIT_SKILL_NAME}" not federated into list_skills`);
+      });
+
+      await checkAsync('admit_skill renders a non-HTTPS origin as a typed quarantined tool error (Req 16.4)', async () => {
+        // A non-HTTPS url is rejected at the `validate` stage BEFORE any fetch, returned as a tool
+        // error (isError: true), never thrown across the boundary. Offline — no network call.
+        const resp = await client!.send('tools/call', {
+          name: 'admit_skill',
+          arguments: { factoryId: 'http', namespace: 'attacker-ns', url: 'http://insecure.example.com/x' },
+        });
+        assert(resp.result?.isError === true, 'Non-HTTPS origin was not rejected as a tool error');
+        assert(typeof resp.result?.content?.[0]?.text === 'string', 'Quarantine error has no text payload');
+      });
+
     } finally {
       if (client) await client.close();
     }
 
-    // ─── 6. Cleanliness ────────────────────────────────────────
+    // ─── 6. stdio Bus Transport (shipped bundled worker) ───────────────────────────────
+    //
+    // Stand up the bus transport from the INSTALLED package the way the native bus kernel
+    // does in production — spawn the SHIPPED `out/dist/bus-worker.mjs` with `node` and drive
+    // it over raw NDJSON JSON-RPC 2.0 — proving the package can serve a `skills.read.v1`
+    // round-trip over the bus with NO dev tooling. NO `--packageRoot` arg: the bundled worker
+    // self-resolves its packageRoot from `out/dist/` (Task B6.1). This is the bus half of the
+    // "both transports through the installed package" claim (Req 14.2); it gates the live E2E.
+
+    console.log('\n── stdio Bus Transport (bundled worker, NDJSON JSON-RPC) ──');
+
+    const busWorkerPath = path.join(pkgDir, 'out', 'dist', 'bus-worker.mjs');
+    let busClient: BusClient | null = null;
+
+    try {
+      busClient = new BusClient(busWorkerPath, consumerDir);
+
+      await checkAsync('bundled bus worker serves skills.read.v1 round-trip (Req 14.2)', async () => {
+        const resp = await busClient!.request(M_READ, { ref: { kind: 'name', name: BUS_BUNDLED_SKILL } });
+        assert(resp != null, 'No result from bus worker');
+        assert(resp.ok === true, `read over bus failed: ${JSON.stringify(resp.ok ? null : resp.error)}`);
+        assert(typeof resp.data?.body === 'string' && resp.data.body.length > 0, 'Bus read returned empty body');
+        assert(resp.data.descriptor?.fqid === `bundled:${BUS_BUNDLED_SKILL}`, `Unexpected fqid: ${resp.data.descriptor?.fqid}`);
+      });
+
+      await checkAsync('bus-read body is byte-for-byte identical to the bundled SKILL.md (Req 14.3)', async () => {
+        const onDisk = fs.readFileSync(
+          path.join(pkgDir, 'agent-skills', BUS_BUNDLED_SKILL, 'SKILL.md'),
+          'utf-8',
+        );
+        const resp = await busClient!.request(M_READ, { ref: { kind: 'name', name: BUS_BUNDLED_SKILL } });
+        assert(resp.ok === true, `read over bus failed: ${JSON.stringify(resp.ok ? null : resp.error)}`);
+        assert(resp.data.body === onDisk, 'Bus-read body does not match on-disk SKILL.md byte-for-byte');
+      });
+
+      await checkAsync('bundled bus worker returns a typed not_found for an unknown name (returned, not thrown)', async () => {
+        const resp = await busClient!.request(M_READ, { ref: { kind: 'name', name: 'no-such-skill-xyz' } });
+        assert(resp.ok === false, 'Expected a returned error for an unknown skill name');
+        assert(resp.error?.code === 'not_found', `Expected not_found, got ${resp.error?.code}`);
+      });
+    } finally {
+      if (busClient) await busClient.close();
+    }
+
+    // ─── 7. Cleanliness ────────────────────────────────────────
 
     console.log('\n── Cleanliness ──');
 

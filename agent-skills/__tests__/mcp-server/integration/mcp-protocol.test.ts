@@ -20,14 +20,24 @@ import * as fs from 'fs';
 const MCP_SERVER_PATH = path.resolve(__dirname, '..', '..', '..', '..', 'out', 'dist', 'mcp-server.mjs');
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
-/** The 5 expected tool names exposed by the MCP server. */
-const EXPECTED_TOOL_NAMES = [
+/**
+ * The five READ tools — their names are part of the byte-for-byte backward-compat surface
+ * (Req 15.1) and MUST stay unchanged forever, independent of any additive tool.
+ */
+const READ_TOOL_NAMES = [
   'list_skills',
   'read_skill',
   'list_references',
   'read_reference',
   'search_skills',
 ].sort();
+
+/**
+ * The true DEFAULT tool surface of the shipped MCP server (Req 16.1, 16.8): the five read tools
+ * PLUS the additive `admit_skill` tool promoted into production by Task 13.1. `admit_skill` is
+ * additive — it never alters the five read tools above (Req 15.1).
+ */
+const EXPECTED_TOOL_NAMES = [...READ_TOOL_NAMES, 'admit_skill'].sort();
 
 /**
  * Helper: manages a child process running the MCP server and provides
@@ -286,15 +296,26 @@ describe('MCP Protocol Integration Tests', () => {
         toolsResponse = await client.sendRequest('tools/list');
       });
 
-      it('returns exactly 5 tool definitions', () => {
+      it('returns exactly 6 tool definitions (five read tools + admit_skill)', () => {
         expect(toolsResponse.result).toBeDefined();
         expect(toolsResponse.result.tools).toBeDefined();
-        expect(toolsResponse.result.tools).toHaveLength(5);
+        expect(toolsResponse.result.tools).toHaveLength(6);
       });
 
       it('returns the correct tool names', () => {
         const toolNames = toolsResponse.result.tools.map((t: any) => t.name).sort();
         expect(toolNames).toEqual(EXPECTED_TOOL_NAMES);
+      });
+
+      it('preserves the five read tools byte-for-byte alongside the additive admit_skill (Req 15.1, 16.1)', () => {
+        const toolNames: string[] = toolsResponse.result.tools.map((t: any) => t.name);
+        // The five read tools are all still present, names unchanged.
+        for (const readTool of READ_TOOL_NAMES) {
+          expect(toolNames).toContain(readTool);
+        }
+        // admit_skill is the ONLY addition — the surface grew by exactly one tool.
+        expect(toolNames).toContain('admit_skill');
+        expect(toolNames.slice().sort()).toEqual(EXPECTED_TOOL_NAMES);
       });
 
       it('each tool definition has name, description, and inputSchema', () => {

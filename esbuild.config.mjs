@@ -34,6 +34,20 @@ const runtimeSubpathExternal = [
   'zod',
 ];
 
+// ─── Shared ESM banner ──────────────────────────────────────────
+//
+// `createFileResolver` resolves the installed package root from `__dirname`
+// (`path.resolve(__dirname, '..', '..')`). esbuild's ESM output does NOT define
+// `__dirname`/`__filename`, so any bundle whose code path reaches `createFileResolver`
+// must reconstruct them from `import.meta.url`. Both the MCP server and the stdio Bus
+// worker reach it, so the definition is factored here to keep the two banners in sync.
+const esmDirnameBanner = [
+  'import { fileURLToPath as __kiro_fileURLToPath } from "node:url";',
+  'import { dirname as __kiro_dirname } from "node:path";',
+  'const __filename = __kiro_fileURLToPath(import.meta.url);',
+  'const __dirname = __kiro_dirname(__filename);',
+].join('\n');
+
 // ─── Build targets ──────────────────────────────────────────────
 
 const targets = {
@@ -65,13 +79,7 @@ const targets = {
     sourcemap: false,
     external,
     banner: {
-      js: [
-        '#!/usr/bin/env node',
-        'import { fileURLToPath as __mcp_fileURLToPath } from "node:url";',
-        'import { dirname as __mcp_dirname } from "node:path";',
-        'const __filename = __mcp_fileURLToPath(import.meta.url);',
-        'const __dirname = __mcp_dirname(__filename);',
-      ].join('\n'),
+      js: ['#!/usr/bin/env node', esmDirnameBanner].join('\n'),
     },
     loader: { '.json': 'json' },
     logLevel: 'info',
@@ -88,6 +96,37 @@ const targets = {
     minify: true,
     sourcemap: false,
     external: runtimeSubpathExternal,
+    // The runtime composition bundle reaches `__dirname` on two code paths: indirectly via
+    // `createFileResolver` (bundled skill-asset resolution) and directly via
+    // `createDefaultBus` (B6.2 — resolving the sibling `out/dist/bus-worker.mjs`). esbuild's
+    // ESM output does not define `__dirname`, so this bundle needs the same shim the MCP
+    // server and bus-worker targets carry.
+    banner: {
+      js: esmDirnameBanner,
+    },
+    loader: { '.json': 'json' },
+    logLevel: 'info',
+  },
+  'bus-worker': {
+    label: 'stdio Bus Worker',
+    entryPoints: ['agent-skills/runtime/transport/bus-worker.ts'],
+    outfile: 'out/dist/bus-worker.mjs',
+    bundle: true,
+    platform: 'node',
+    target: ['node20'],
+    format: 'esm',
+    treeShaking: true,
+    minify: true,
+    sourcemap: false,
+    // `@stdiobus/node` stays external like every other runtime/bus target: its prebuilt
+    // native addon resolves relative to its own package dir, so it must not be inlined.
+    external,
+    // No shebang: this worker is spawned as `process.execPath out/dist/bus-worker.mjs`
+    // (B6.2), never executed directly. The `__dirname` definition is required because the
+    // worker resolves its packageRoot through `createFileResolver` (same as the MCP server).
+    banner: {
+      js: esmDirnameBanner,
+    },
     loader: { '.json': 'json' },
     logLevel: 'info',
   },
