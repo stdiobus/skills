@@ -83,6 +83,13 @@ const ADAPTER_SOURCE_PATH = path.join(AGENT_SKILLS_DIR, 'mcp-server.ts');
 // composition (the admission-capable MutableProviderView + InProcessSkillsRuntime +
 // AdmissionController wiring — Task 13.1) is still asserted on `mcp-server.ts`.
 const BUILDER_SOURCE_PATH = path.join(AGENT_SKILLS_DIR, 'lib', 'build-server.ts');
+// The production authority composition (the admission-capable MutableProviderView +
+// InProcessSkillsRuntime + AdmissionController wiring) was unified (M-002 amendment, Task U1)
+// into ONE shared factory `runtime/compose.ts`, called by BOTH production composition roots
+// (`mcp-server.ts` and `runtime/transport/bus-worker.ts`) so they can never drift. Structural
+// assertions about the composition therefore target the factory; the adapter is asserted to
+// DELEGATE to it (and to the shared builder) rather than hand-wire the stack inline.
+const COMPOSE_SOURCE_PATH = path.join(AGENT_SKILLS_DIR, 'runtime', 'compose.ts');
 const MCP_SERVER_PATH = path.join(PACKAGE_ROOT, 'out', 'dist', 'mcp-server.mjs');
 
 /** A name that is NOT in the published `SkillName` set / manifest. */
@@ -105,9 +112,10 @@ describe('adapter is delegate-only (structural — Req 9.4)', () => {
   const stripComments = (s: string): string =>
     s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-  // The 5-tool wiring lives in the shared builder; production composition lives in the adapter.
+  // The 5-tool wiring lives in the shared builder; production composition lives in the factory.
   const builderSource = stripComments(fs.readFileSync(BUILDER_SOURCE_PATH, 'utf-8'));
   const adapterSource = stripComments(fs.readFileSync(ADAPTER_SOURCE_PATH, 'utf-8'));
+  const composeSource = stripComments(fs.readFileSync(COMPOSE_SOURCE_PATH, 'utf-8'));
 
   it('uses the open-world skill schema z.string().min(1) (shared builder)', () => {
     expect(builderSource).toMatch(/z\.string\(\)\.min\(1\)/);
@@ -130,17 +138,21 @@ describe('adapter is delegate-only (structural — Req 9.4)', () => {
     expect(builderSource).toMatch(/runtime\.readReference\s*\(/);
   });
 
-  it('the adapter composes the admission-capable runtime in-process and delegates to the shared builder (production composition, Req 16.6)', () => {
-    // Task 13.1 promotes the production server to the SAME admission-capable composition the
-    // proven bus worker / e2e admit harness use: the bundled provider seeds a
-    // MutableProviderView shared by the InProcessSkillsRuntime AND the AdmissionController, so
-    // an admitted provider is materialized IN-PROCESS (no new bus/worker — Req 16.6) and is
+  it('the shared factory composes the admission-capable runtime in-process, and the adapter delegates to it + the shared builder (production composition, Req 16.6)', () => {
+    // M-002 amendment (Task U1): the production authority composition is ONE shared factory
+    // `composeSkillsRuntime()` (runtime/compose.ts), called by BOTH production composition roots
+    // so the MCP server and the bus worker can never drift. The factory wires the SAME
+    // admission-capable stack the proven bus worker / e2e admit harness use: the bundled provider
+    // seeds a MutableProviderView shared by the InProcessSkillsRuntime AND the AdmissionController,
+    // so an admitted provider is materialized IN-PROCESS (no new bus/worker — Req 16.6) and is
     // reachable through the `skills.add.v1` request seam wired as the runtime's admission handler.
-    expect(adapterSource).toMatch(/new MutableProviderView\s*\(/);
-    expect(adapterSource).toMatch(/new InProcessSkillsRuntime\s*\(/);
-    expect(adapterSource).toMatch(/new AdmissionController\s*\(/);
-    expect(adapterSource).toMatch(/new AdmissionCapabilityHandler\s*\(/);
-    // And the adapter delegates to the shared builder rather than re-registering tools.
+    expect(composeSource).toMatch(/new MutableProviderView\s*\(/);
+    expect(composeSource).toMatch(/new InProcessSkillsRuntime\s*\(/);
+    expect(composeSource).toMatch(/new AdmissionController\s*\(/);
+    expect(composeSource).toMatch(/new AdmissionCapabilityHandler\s*\(/);
+    // The adapter DELEGATES to the shared factory rather than hand-wiring the composition inline,
+    // and to the shared builder rather than re-registering tools.
+    expect(adapterSource).toMatch(/composeSkillsRuntime\s*\(/);
     expect(adapterSource).toMatch(/buildSkillsMcpServer\s*\(/);
   });
 });

@@ -48,7 +48,6 @@ import type {
   ProviderBlueprint,
   ProviderCreationContext,
 } from '../admission/provider-blueprint.js';
-import { OriginAllowlist } from '../admission/origin-allowlist.js';
 import type { Schema, SchemaResult } from '../admission/schema.js';
 import type {
   ListSkillsInput,
@@ -92,6 +91,20 @@ export class HttpProviderError extends Error {
     this.name = 'HttpProviderError';
   }
 }
+
+/**
+ * Internal outcome of a SINGLE HTTPS fetch attempt (U4; design Inv 10, R&D §6).
+ *
+ * A total, returned (never-thrown) result the bounded-retry loop in
+ * {@link HttpSkillProvider.read} inspects: a success carries the materialized
+ * {@link SkillContent}; a failure carries the typed {@link HttpProviderError} the runtime
+ * surfaces AND a `retryable` flag that classifies the fault as transient (retry) or terminal
+ * (give up). Keeping the per-attempt result a value — not a throw — lets the loop decide
+ * locally without re-deriving the error code.
+ */
+type FetchAttemptOutcome =
+  | { readonly ok: true; readonly content: SkillContent }
+  | { readonly ok: false; readonly error: HttpProviderError; readonly retryable: boolean };
 
 /** Allowed config keys — anything else is an unknown key the schema rejects (Req 4.2). */
 const ALLOWED_CONFIG_KEYS: ReadonlySet<string> = new Set(['url', 'maxContentBytes', 'timeoutMs']);
@@ -200,6 +213,11 @@ function deriveSkillName(url: string): string {
  * `references`, so the runtime applies its documented fallback rather than invoking them.
  */
 export class HttpSkillProvider implements SkillProvider {
+  /** Bounded retry budget for a transient HTTPS acquire fault (U4 — R&D Inv 10). */
+  private static readonly MAX_FETCH_ATTEMPTS = 3;
+  /** Base exponential-backoff delay between retries; grows `* 2^(attempt-1)`. */
+  private static readonly BASE_BACKOFF_MS = 100;
+
   readonly id: string;
   readonly capabilities: SkillProviderCapabilities;
 
@@ -266,18 +284,53 @@ export class HttpSkillProvider implements SkillProvider {
   }
 
   /**
-   * Acquire the skill body over real HTTPS, bounded and cancellable (Req 7.1, 7.5, 8.1, 12.3).
+   * Acquire the skill body over real HTTPS, bounded, cancellable, and resilient
+   * (Req 7.1, 7.5, 8.1, 12.3; U4 — R&D Inv 10).
    *
-   * Arms a finite timeout from `config.timeoutMs` and links the OPTIONAL caller `signal`, so
-   * the fetch aborts on the first of the deadline or external cancellation. Throws a typed
-   * {@link HttpProviderError} on an unavailable origin, a non-2xx status, an over-budget
-   * abort, or an over-limit body; the runtime catches it and returns the typed error.
+   * Wraps the single-fetch acquisition in a BOUNDED RETRY (up to
+   * {@link HttpSkillProvider.MAX_FETCH_ATTEMPTS} attempts with exponential backoff —
+   * standard practice, nothing more). Only TRANSIENT faults are retried: a network-level
+   * failure, our OWN deadline expiry, or a retryable status (`5xx` / `429`). TERMINAL
+   * conditions are never retried: an over-limit body (`content_too_large`), a definitive
+   * non-2xx (e.g. `404`), or caller-initiated cancellation. On exhaustion it throws the same
+   * typed {@link HttpProviderError} the runtime catches and returns — the happy path (a first
+   * attempt that succeeds) is byte-for-byte the prior behaviour with no added delay.
    *
    * The `signal` parameter is an additive optional argument (structurally assignable to the
    * {@link SkillProvider.read} contract signature) used by the runtime / admission seam to
    * thread a parent cancellation; callers that omit it still get the finite default timeout.
    */
   async read(resolved: ResolvedSkill, signal?: AbortSignal): Promise<SkillContent> {
+    let lastError: HttpProviderError | undefined;
+
+    for (let attempt = 1; attempt <= HttpSkillProvider.MAX_FETCH_ATTEMPTS; attempt += 1) {
+      const outcome = await this.attemptRead(resolved, signal);
+      if (outcome.ok) return outcome.content;
+
+      lastError = outcome.error;
+      // Terminal fault, or no attempts left → surface the typed error (runtime returns it).
+      if (!outcome.retryable || attempt === HttpSkillProvider.MAX_FETCH_ATTEMPTS) {
+        throw outcome.error;
+      }
+      // Transient fault with budget remaining → backoff, then retry (aborts early on cancel).
+      await this.backoff(attempt, signal);
+    }
+
+    // Unreachable: the final attempt always returns or throws above. Defensive for the type.
+    throw lastError ?? this.toTypedError(new Error('HTTPS fetch retry budget exhausted'));
+  }
+
+  /**
+   * Perform a SINGLE bounded, cancellable HTTPS fetch attempt and classify its outcome.
+   *
+   * Arms a finite timeout from `config.timeoutMs` and links the OPTIONAL caller `signal`, so
+   * this attempt aborts on the first of the deadline or external cancellation. Returns a
+   * total {@link FetchAttemptOutcome} (never throws across its own boundary): success carries
+   * the {@link SkillContent}; failure carries the typed error and whether the fault is
+   * transient. A non-2xx is classified by {@link HttpSkillProvider.isRetryableStatus}; a
+   * thrown fetch fault by {@link HttpSkillProvider.isRetryableFailure}.
+   */
+  private async attemptRead(resolved: ResolvedSkill, signal?: AbortSignal): Promise<FetchAttemptOutcome> {
     const controller = new AbortController();
     const onParentAbort = (): void => controller.abort();
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -300,22 +353,72 @@ export class HttpSkillProvider implements SkillProvider {
       });
 
       if (!response.ok) {
-        throw new HttpProviderError(
+        const error = new HttpProviderError(
           { code: 'provider_error', provider: this.id, message: `HTTPS origin returned status ${response.status}` },
           `HTTPS origin returned status ${response.status} for ${this.config.url}`,
         );
+        return { ok: false, error, retryable: HttpSkillProvider.isRetryableStatus(response.status) };
       }
 
       // Reject before materialization when the origin declares an over-limit size (Req 8.1).
       this.enforceDeclaredSize(response);
       const text = await this.readBounded(response);
-      return { descriptor: resolved.descriptor, body: text };
+      return { ok: true, content: { descriptor: resolved.descriptor, body: text } };
     } catch (err) {
-      throw this.toTypedError(err);
+      return { ok: false, error: this.toTypedError(err), retryable: this.isRetryableFailure(err, signal) };
     } finally {
       if (timer !== undefined) clearTimeout(timer);
       if (signal !== undefined) signal.removeEventListener('abort', onParentAbort);
     }
+  }
+
+  /**
+   * Whether a thrown fetch fault is TRANSIENT (worth retrying). A network-level failure is
+   * transient; an abort is transient ONLY when it was our own deadline — caller-initiated
+   * cancellation (`signal.aborted`) is terminal; an over-limit body is terminal.
+   */
+  private isRetryableFailure(err: unknown, signal?: AbortSignal): boolean {
+    if (err instanceof HttpProviderError && err.runtimeError.code === 'content_too_large') {
+      return false;
+    }
+    const isAbort = err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
+    if (isAbort) {
+      // Caller cancellation is terminal; our finite-deadline abort is a transient timeout.
+      return signal?.aborted !== true;
+    }
+    // A network-level fault (DNS, connection reset, TLS handshake) is transient.
+    return true;
+  }
+
+  /**
+   * Whether a non-2xx HTTP status is TRANSIENT: `429 Too Many Requests` and any `5xx` server
+   * error are worth a bounded retry; every other status (e.g. `404`, `403`) is terminal.
+   */
+  private static isRetryableStatus(status: number): boolean {
+    return status === 429 || status >= 500;
+  }
+
+  /**
+   * Await the exponential backoff before the next attempt: `BASE_BACKOFF_MS * 2^(attempt-1)`.
+   * Resolves early (no further wait) if the caller `signal` aborts during the delay, so a
+   * cancellation between attempts is honored promptly.
+   */
+  private async backoff(attempt: number, signal?: AbortSignal): Promise<void> {
+    const delayMs = HttpSkillProvider.BASE_BACKOFF_MS * 2 ** (attempt - 1);
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, delayMs);
+      timer.unref?.();
+      if (signal !== undefined) {
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      }
+    });
   }
 
   /**
@@ -421,69 +524,21 @@ export class HttpSkillProvider implements SkillProvider {
 }
 
 /**
- * Compose the HTTPS-only {@link httpProviderConfigSchema} with an operator origin allowlist
- * (Milestone-002, Task 13.2; design §"Components" 8; Req 16.5) — a pure schema-composition
- * value helper (architecture standard §5).
- *
- * The result is an ADDITIVE guard, never a replacement: it runs the base schema FIRST
- * (preserving HTTPS-only + bounds + unknown-key rejection unchanged) and, only on success,
- * checks the validated `url`'s origin against the allowlist. A non-allowlisted origin becomes
- * a `{ ok: false; issues }` — which the admission `validate` stage maps to a typed
- * `bad_request` quarantine (`stage: 'validate'`) BEFORE the `acquire` stage performs any fetch.
- *
- * When the allowlist is UNSET ({@link OriginAllowlist.isConfigured} is `false`), this returns
- * the base schema by REFERENCE: the default surface is byte-for-byte the pre-13.2 schema, so a
- * server with no operator allowlist behaves exactly as before (public HTTPS permitted). The
- * tool is unaffected either way — this only restricts which origins succeed, never whether the
- * tool exists (Req 16.5).
- */
-export function withOriginAllowlist(
-  base: Schema<HttpProviderConfig>,
-  allowlist: OriginAllowlist,
-): Schema<HttpProviderConfig> {
-  // Unset → identical to the default schema (same reference): no behaviour change (Req 16.5).
-  if (!allowlist.isConfigured) return base;
-
-  return {
-    parse(input: unknown): SchemaResult<HttpProviderConfig> {
-      const parsed = base.parse(input);
-      // Base schema rejection (non-HTTPS, missing bounds, unknown key) is preserved as-is —
-      // the allowlist never runs on an already-invalid config.
-      if (!parsed.ok) return parsed;
-      if (!allowlist.permits(parsed.value.url)) {
-        return {
-          ok: false,
-          issues: [
-            `url origin is not permitted by the operator origin allowlist: ${parsed.value.url}`,
-          ],
-        };
-      }
-      return parsed;
-    },
-  };
-}
-
-/**
  * The one sanctioned Abstract Factory for the `http` provider (Req 3.2; architecture §7).
  *
  * `id === 'http'` is the {@link ProviderDescriptor.factoryId} that selects this blueprint.
- * `configSchema` is the HTTPS-only {@link httpProviderConfigSchema}, OPTIONALLY composed with
- * an operator {@link OriginAllowlist} (Req 16.5); `create` constructs an in-process
- * {@link HttpSkillProvider} from a VALIDATED config and the admission-resolved
+ * `configSchema` is the HTTPS-only {@link httpProviderConfigSchema}; `create` constructs an
+ * in-process {@link HttpSkillProvider} from a VALIDATED config and the admission-resolved
  * {@link ProviderCreationContext} (never the raw wire config).
  *
- * The OPTIONAL `allowlist` constructor argument defaults to {@link OriginAllowlist.unrestricted}
- * so every existing caller (`new HttpSkillProviderBlueprint()`) keeps the default schema by
- * reference — the allowlist is a deployment-time restriction the composition layer
- * (`mcp-server.ts`) supplies from config/environment, never a change to the tool's presence.
+ * No origin allowlist / origin-trust machinery (M-002 amendment Inv 11): reaching a public
+ * external HTTPS source needs no SSL keys or origin governance. External content stays safe by
+ * being untrusted-as-data, size/time-bounded, never executed, and namespace-governed — not by
+ * restricting origins.
  */
 export class HttpSkillProviderBlueprint implements ProviderBlueprint<HttpProviderConfig> {
   readonly id = 'http';
-  readonly configSchema: Schema<HttpProviderConfig>;
-
-  constructor(allowlist: OriginAllowlist = OriginAllowlist.unrestricted()) {
-    this.configSchema = withOriginAllowlist(httpProviderConfigSchema, allowlist);
-  }
+  readonly configSchema: Schema<HttpProviderConfig> = httpProviderConfigSchema;
 
   create(config: HttpProviderConfig, ctx: ProviderCreationContext): SkillProvider {
     return new HttpSkillProvider(config, ctx);

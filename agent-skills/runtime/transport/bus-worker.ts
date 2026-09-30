@@ -39,19 +39,8 @@
  */
 
 import * as readline from 'readline';
-import { createFileResolver } from '../../lib/file-resolver.js';
-import { InProcessSkillsRuntime, type TrustLookup } from '../in-process-runtime.js';
-import { FilesystemSkillProvider } from '../providers/filesystem-provider.js';
-import { bundledTrustPolicy, UNTRUSTED_DEFAULT, type TrustPolicy } from '../trust.js';
-import { HttpSkillProviderBlueprint } from '../providers/http-skill-provider.js';
+import { composeSkillsRuntime } from '../compose.js';
 import { AdmissionCapabilities, SkillsCapabilities } from '../capabilities.js';
-import { MutableProviderView } from '../registry.js';
-import { AdmissionController } from '../admission/admission-controller.js';
-import { AdmissionCapabilityHandler } from '../admission/admission-capabilities.js';
-import { ProviderBlueprintRegistry } from '../admission/blueprint-registry.js';
-import { NamespaceOwnershipTable } from '../admission/namespace-ownership.js';
-import { OperationBudget } from '../admission/operation-budget.js';
-import { Sha256ContentHasher } from '../admission/content-hasher.js';
 import { ParamCodec } from './param-codec.js';
 import type { RawProviderDescriptor } from '../admission/provider-descriptor.js';
 import type {
@@ -63,82 +52,20 @@ import type {
   SkillResponse,
 } from '../contract.js';
 
-// packageRoot resolution — reuse the EXACT bundled-layout resolution the MCP server uses
-// (`createFileResolver`, which resolves `path.resolve(__dirname, '..', '..')`). This is
-// correct from BOTH execution locations the worker now has, with no hardcoded offset:
-//   - bundled at `out/dist/bus-worker.mjs`  → `__dirname` = out/dist → root is 2 up;
-//   - dev/tsx source at `agent-skills/runtime/transport/bus-worker.ts` → `createFileResolver`
-//     runs in `agent-skills/lib/file-resolver.ts`, whose `__dirname` is also 2 up from root.
-// In the ESM bundle `__dirname` is supplied by the esbuild banner (see esbuild.config.mjs).
-const packageRoot = createFileResolver().packageRoot;
-
-/**
- * Default per-operation admission budget, in milliseconds (Task 9.2).
- *
- * Bounds the WHOLE admission pipeline (`discover → … → register`) under one linked signal,
- * so a slow/unavailable external origin cannot hang the worker (Req 12.1). Interim/policy
- * value, not frozen; the HTTPS provider also arms its own finite per-fetch timeout.
- */
-const ADMISSION_BUDGET_MS = 30_000;
-
-// ─── Admission wiring — NO new worker, NO additional StdioBus (Task 9.2) ──────────────
+// ─── Composition root — the ONE shared production factory (Task U1) ───────────────────
 //
-// COMPOSITION ROOT (Task B5 audit; architecture §"no new singletons", Req 15.1/15.5):
-// the module-level `const`s below (view, namespace table, runtime, blueprint registry,
-// controller, handler) are this worker PROCESS's single composition root — wired exactly
-// once when the bus kernel spawns the worker and the module body runs. They are NOT a
-// singleton breach: none is `export`ed, no static accessor exposes them, and no other module
-// imports this entrypoint, so no instance is reachable as shared global mutable state. A
-// `buildBusWorkerRuntime()` factory is deliberately NOT introduced — there is no second
-// composition site and no global-state escape to abstract away.
+// This worker PROCESS is its own composition root: it calls `composeSkillsRuntime()` exactly
+// once when the bus kernel spawns the worker and the module body runs, and owns the returned
+// graph for the process's lifetime. The factory is the SAME one `mcp-server.ts` calls, so the
+// two production entrypoints can never drift in provider set, native search ranking, trust,
+// namespaces, or admission (the split-brain M-001 §5.5 forbids). The returned instances are
+// NOT a singleton breach: none is `export`ed, no static accessor exposes them, and no other
+// module imports this entrypoint, so no instance is reachable as shared global mutable state.
 //
-// The admitted provider is materialized IN-PROCESS in this same worker's runtime. The
-// filesystem provider seeds a MutableProviderView; the runtime reads from THAT view, and the
-// AdmissionController's `register` stage admits (copy-on-write) into the SAME view — so an
-// admitted provider becomes visible to the next runtime operation with nothing new spawned.
-//
-// Baseline preservation (Req 15.1, 15.2): seeding a MutableProviderView with the single
-// filesystem provider yields the identical `providers()` snapshot a ConstantProviderView
-// would (same reference identity, same order), so the proven single-bundled-provider path is
-// byte-for-byte unchanged; the runtime already accepts any ProviderView.
-const fsProvider = new FilesystemSkillProvider({ packageRoot });
-const providerView = new MutableProviderView([fsProvider]);
-const namespaces = new NamespaceOwnershipTable();
-// Per-provider trust lookup (Task 9.2; design §9, Req 6.1/11.5) — the SAME pattern
-// `createRuntimeFromRegistry` builds: index each KNOWN provider's EFFECTIVE trust policy by
-// id, and resolve every unknown id to the least-privileged `UNTRUSTED_DEFAULT`. Wiring this
-// as the runtime's 2nd ctor arg makes the provider-output content-size boundary
-// (`ProviderOutputValidator.validateContentSize` → `checkContentSize` against the effective
-// `maxContentBytes`) LIVE on the post-admission read path: an admitted external provider
-// (whose id is its claimed namespace — never in this map) resolves to `UNTRUSTED_DEFAULT`, so
-// an oversized body it returns over the bus is rejected with `content_too_large` (returned,
-// never thrown). The bundled provider keeps its EFFECTIVE first-party policy
-// (`bundledTrustPolicy(packageRoot)` — same trust the registry composition and the
-// resource-scope proof register it with), so its baseline read/list/search is byte-for-byte
-// unchanged (Req 15.2). Keyed on `fsProvider.id` (not a literal) so the bundled entry can
-// never silently fall through to the untrusted default.
-const policyById = new Map<string, TrustPolicy>([[fsProvider.id, bundledTrustPolicy(packageRoot)]]);
-const trustOf: TrustLookup = (providerId) => policyById.get(providerId) ?? UNTRUSTED_DEFAULT;
-// Wire the SAME namespace-ownership table this worker's AdmissionController holds into the
-// runtime (3rd ctor arg), so the per-operation provider-output anti-spoofing boundary
-// (Req 5.4, 5.5) consults the same ownership source of truth as admission-time `claim`. The
-// bundled provider owns no namespace and stays EXEMPT, so the single-bundled-provider
-// baseline is byte-for-byte unchanged (Req 15.2).
-const runtime = new InProcessSkillsRuntime(providerView, trustOf, namespaces);
-
-// The single admission authority over the SAME view (no new pool/bus). The HTTPS blueprint is
-// the one external factory M-002 ships; the no-credential adapter is the default (public
-// origins). The runtime above and this controller share `providerView` and `namespaces`.
-const blueprints = new ProviderBlueprintRegistry();
-blueprints.register(new HttpSkillProviderBlueprint());
-const admissionController = new AdmissionController(
-  blueprints,
-  providerView,
-  namespaces,
-  new OperationBudget(ADMISSION_BUDGET_MS),
-  new Sha256ContentHasher(),
-);
-const admissionHandler = new AdmissionCapabilityHandler(admissionController);
+// `runtime` reads from the same provider view the admission `register` stage mutates and is
+// wired with the in-process admission seam; `admissionHandler` is the single admission handler
+// over that SAME controller. No new worker pool and no additional StdioBus are created.
+const { runtime, admissionHandler, packageRoot } = composeSkillsRuntime();
 
 function log(msg: string): void {
   process.stderr.write(`[bus-worker] ${msg}\n`);
@@ -155,7 +82,7 @@ function log(msg: string): void {
  * The `skills.add.v1` entry follows the design data-flow exactly: the decoded RAW descriptor
  * is normalized and admitted via the {@link AdmissionCapabilityHandler} (normalize →
  * `controller.admit` → `toSkillResponse`). It adds NO new worker pool and NO additional
- * `StdioBus`; admission mutates the SAME in-process `providerView` this worker's runtime
+ * `StdioBus`; admission mutates the SAME in-process provider view this worker's runtime
  * reads from, so a subsequently-admitted provider is reachable over this very transport.
  */
 const DISPATCH: Record<string, (input: unknown) => Promise<SkillResponse<unknown>>> = {
