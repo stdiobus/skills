@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fact-Based Research"
+  short_description: "Data-driven R&D: dependencies, verification, and a reverse approach"
+  default_prompt: "Apply $evidence-driven-rd: reconstruct the facts, formulate a testable hypothesis, and execute the next permissible research step."

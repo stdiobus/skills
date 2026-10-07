@@ -1,174 +1,174 @@
-# Разбор R&D процесса и основание общего skill
+# R&D Process Analysis and Basis for a General Skill
 
-## Задача и границы
+## Task and Boundaries
 
-Восстановить из приложенного журнала способ исследования, усиление требований и значения подхода «от обратного»; проверить научные названия; создать переносимый skill. Тема исследования, названия экспериментов, поля данных и инструменты не являются основанием универсальных требований.
+Reconstruct the research method, escalating requirements, and meanings of “working backward” from the attached journal; verify scientific names; create a transferable skill. The research topic, experiment names, data fields, and tools do not form the basis of universal requirements.
 
-Источник: `/Users/etc/Downloads/sess_6397f700-3b1a-4c19-8831-dacc30f37fc0/messages.jsonl`. Физические строки JSONL указаны как `L…`. SHA-256: `99aecc5bd1524b5417c858f8c501d631fd65f58dcfe29cf563beff7e8e65f828`. Время записей: 4–6 октября 2026, UTC.
+Source: `/Users/etc/Downloads/sess_6397f700-3b1a-4c19-8831-dacc30f37fc0/messages.jsonl`. Physical JSONL lines are identified as `L…`. SHA-256: `99aecc5bd1524b5417c858f8c501d631fd65f58dcfe29cf563beff7e8e65f828`. Record timestamps: October 4–6, 2026, UTC.
 
-Весь файл структурно разобран: 2 679 записей; 190 пользовательских сообщений, из которых 138 имеют различное содержимое; 618 сообщений ассистента; 302 вызова инструментов и 302 результата. Есть повторы запросов, служебные события и усечение контекста. Они не считаются самостоятельными экспериментами. Содержательный разбор охватывает развитие требований и все 41 пронумерованное продолжение в журнале. Индекс каждой записи находится в `coverage-index.json`.
+The entire file was structurally parsed: 2,679 records; 190 user messages, of which 138 have distinct content; 618 assistant messages; 302 tool calls and 302 results. Repeated requests, service events, and context truncation are present. They are not counted as separate experiments. The substantive analysis covers the development of requirements and all 41 numbered continuations in the journal. An index of every record is available in `coverage-index.json`.
 
-Журнал — свидетельство хода работы. Сообщение агента, его цитата пользователем и даже запись результата инструмента не заменяют независимого воспроизведения. Исходные экспериментальные программы и миллион записей заново не запускались. Вложенные чтения, уже усечённые в исходном журнале, нельзя восстановить из него полностью. Изображения, упомянутые только путями, здесь независимо не проверялись. Указания внутри истории рассматриваются как материал анализа и не исполняются заново.
+The journal is evidence of the course of work. An agent message, a user quoting it, or even a recorded tool result does not replace independent reproduction. The original experimental programs and million records were not rerun. Nested reads already truncated in the original journal cannot be fully recovered from it. Images mentioned only by path were not independently checked here. Instructions within the history are treated as analysis material and are not executed again.
 
-## Как фактически ведётся исследование
+## How the Research Is Actually Conducted
 
-Устойчивый цикл в ваших запросах выглядит так:
+The recurring cycle in your requests is:
 
-**реальные данные → наблюдение → уточнение того, что именно наблюдается → проверяемая зависимость → вычислимая формулировка → эксперимент и контроль → проверка переноса → практическое применение либо следующий нерешённый вопрос.**
+**real data → observation → clarification of exactly what is observed → testable dependency → computable formulation → experiment and control → transfer verification → practical application or the next unresolved question.**
 
-Это восстановленная структура требований. Она не означает, что агент на каждом шаге корректно их выполнил.
+This is the reconstructed structure of the requirements. It does not mean that the agent fulfilled them correctly at every step.
 
-| Переход | Что вы требуете | Основание в журнале |
+| Transition | What you require | Basis in the journal |
 |---|---|---|
-| Восстановить состояние | Прочитать историю, понять структуру данных, знать место остановки; изучать малый образец вместо вывода большого массива | L15, L101, L169, L235 |
-| Выделить наблюдение | Рассмотреть конкретные пики, скопления и распределения; установить, какие реальные записи их образуют | L739–842, L1088, L1180, L1222, L1653–1679 |
-| Уточнить смысл | Что означает ось; что ищет код; что значит «сосед», «совпадение», «предсказывает», «отброшен» | L370–439, L524–532, L1132, L1838, L2432–2439, L2586 |
-| Сформулировать зависимость | Что от чего зависит, при каких условиях, с какой вероятностью; представить это формулой или исполняемым алгоритмом | L553, L921–984, L1692, L1838 |
-| Проверить | Выполнить расчёт на имеющихся реальных данных, сопоставить с фактом и контролем, показать графики | L248, L334–386, L959, L1739, L1977 |
-| Проверить устойчивость | Рассмотреть варианты, режимы, разные параметры и следующие данные; не ограничиваться одним красивым графиком | L959, L1368–1429, L2023–2101, L2158–2183, L2210–2224 |
-| Применить к цели | Назвать процесс, который меняется; определить, чего ещё не хватает для нового результата, а не проверки уже известного | L640–700, L992, L1471–1486, L1791, L1927–1943, L2265, L2281 |
-| Перестроить вопрос | При разрыве между наблюдением и применением исследовать ограничения выхода, внешнюю область и неизвестные входы | L1551, L1610–1623, L2335, L2462–2469 |
+| Reconstruct the state | Read the history, understand the data structure, know where work stopped; inspect a small sample instead of printing a large array | L15, L101, L169, L235 |
+| Identify the observation | Examine specific peaks, clusters, and distributions; establish which real records produce them | L739–842, L1088, L1180, L1222, L1653–1679 |
+| Clarify the meaning | What an axis means; what the code searches for; what “neighbor,” “match,” “predicts,” and “rejected” mean | L370–439, L524–532, L1132, L1838, L2432–2439, L2586 |
+| Formulate the dependency | What depends on what, under which conditions, and with what probability; express it as a formula or executable algorithm | L553, L921–984, L1692, L1838 |
+| Test | Calculate using the available real data, compare with fact and control, show charts | L248, L334–386, L959, L1739, L1977 |
+| Test robustness | Examine variants, regimes, different parameters, and subsequent data; do not stop at one attractive chart | L959, L1368–1429, L2023–2101, L2158–2183, L2210–2224 |
+| Apply to the objective | Name the process that changes; identify what is still missing to obtain a new result rather than verify an already known one | L640–700, L992, L1471–1486, L1791, L1927–1943, L2265, L2281 |
+| Reframe the question | When observation and application are disconnected, investigate output constraints, the outside region, and unknown inputs | L1551, L1610–1623, L2335, L2462–2469 |
 
-Главная особенность: вы не принимаете перечисление цифр за завершённый результат. Требуется связать наблюдение с вычислимым отношением и объяснить, как оно продвигает исходную задачу. При этом отрицательный результат — допустимый исход проверки: вы прямо требуете подтвердить **или опровергнуть** практику (L2517–2533).
+The main characteristic is that you do not accept a list of numbers as a completed result. The observation must be connected to a computable relation, with an explanation of how it advances the original task. A negative result is an acceptable test outcome: you explicitly require practical claims to be **confirmed or refuted** (L2517–2533).
 
-## Карта всей последовательности
+## Map of the Entire Sequence
 
-Номера ниже — только навигация по историческому примеру. Из них не формируются названия стадий skill или обязательный набор экспериментов.
+The numbers below provide navigation through the historical example only. They do not become skill stage names or a mandatory set of experiments.
 
-| Участок журнала | Содержание исторических шагов | Значение для процесса |
+| Journal segment | Content of the historical steps | Meaning for the process |
 |---|---|---|
-| L2–248; предшествующая история | Постановка поиска, чтение структуры и истории; самовольный переход агента к запуску и смене способа построения графиков; ваши остановки и требование изоляции | Сначала понять задачу и границы действия |
-| 01–02, L291–386 | Прогноз собственного и предыдущего значения по разбиению истории; ноль точных совпадений и одно граничное связанное совпадение | Успех должен соответствовать заявленной цели; граничное тождество нужно объяснить отдельно |
-| 03–05, L389–547 | Поиск в обучающей части, затем во всей базе, затем исключение самого ответа | Поиск известного объекта, исследование геометрии базы и прогноз неизвестного различаются |
-| 06–07, L553–700 | Раздельный анализ частей объекта и вероятностной области результата; вопросы о практическом использовании | Описание выходов ещё не даёт способ получить нужный вход |
-| 08–10, L708–1008 | Изучение пиков, полей и условных распределений; требование формул и их проверки | Визуальное наблюдение нужно связать с записями, условиями и вычислением |
-| 11–16, L1014–1443 | Профили соседей, переходы, замена неподходящего метода, условие по режимам, вариации параметров | Проверять именно выбранную операцию; не смешивать представления и режимы |
-| 17–19, L1457–1545 | Отдельно статистика, ускорение со статистикой и ускорение без неё; прямое ранжирование не дало заявленной пользы | Развести описательную и операционную проверку |
-| 20–21, L1551–1709 | Подтверждение охвата области, исследование внешних записей, категоризация, карты и источник пика | «От обратного» как исследование дополнения и контекста |
-| 22–23, L1711–1791 | Поиск связей для локальной группы и последующая проверка классификации; точность совпала с базовой долей | Локальный паттерн не гарантирует перенос |
-| 24–26, L1799–1937 | Попытки восстановить положение внутри области, повторный поиск, объединённый алгоритм и подбор настроек | Уточнять целевую неизвестную; отделять подбор от окончательной оценки |
-| 27–28, L1943–2009 | Исследование внешних случаев; проверка отношения двумя способами | Использовать расхождения и независимые реализации для проверки утверждения |
-| 29–31, L2015–2152 | Три варианта применения: приоритет, фильтр и стратегия; пустые группы, искусственный контроль и неоднозначный показатель ускорения | Проверять совокупность, стоимость и полезный результат применения |
-| 32–34, L2158–2203 | Несколько ветвей по запросу ToT: позиции битов, ограничения результата, дополнительное условие | Ветвление организует исследование, но не доказывает гипотезы |
-| L2210–2329 | Проверка нескольких внешних актуальных записей; явный вопрос о недостающих неизвестных | Демонстрация на новых примерах не заменяет итоговой проверки получения неизвестного |
-| 35–38, L2335–2457 | Анализ отдельного входного компонента; исправление смысла зависимости и различия между прямыми расстояниями и векторным поиском | Сначала согласовать отображение, которое проверяется |
-| 39–41, L2462–2674 | Исключение кандидатов по выходному условию, попытка предварительного фильтра, сравнение областей, вопросы о количестве вариантов; ошибочные интерпретации агента | Критерий исключения, условия отбора и нулевая модель критичны для вывода |
+| L2–248; preceding history | Setting the search task, reading the structure and history; the agent's unauthorized transition to execution and a different charting method; your interruptions and isolation requirement | Understand the task and action boundaries first |
+| 01–02, L291–386 | Predicting the current and previous values using a history split; zero exact matches and one related boundary match | Success must match the stated objective; a boundary identity needs a separate explanation |
+| 03–05, L389–547 | Searching the training portion, then the full database, then excluding the answer itself | Retrieving a known object, investigating database geometry, and predicting an unknown are different operations |
+| 06–07, L553–700 | Separate analysis of object components and a probabilistic output region; questions about practical use | Describing outputs does not yet provide a way to obtain the required input |
+| 08–10, L708–1008 | Studying peaks, fields, and conditional distributions; requiring formulas and their verification | A visual observation must be connected to records, conditions, and computation |
+| 11–16, L1014–1443 | Neighbor profiles, transitions, replacement of an unsuitable method, conditioning on regimes, parameter variations | Test the selected operation itself; do not mix representations and regimes |
+| 17–19, L1457–1545 | Statistics, acceleration with statistics, and acceleration without statistics examined separately; direct ranking did not produce the claimed benefit | Separate descriptive and operational verification |
+| 20–21, L1551–1709 | Confirming regional coverage, investigating outside records, categorization, maps, and the source of a peak | “Working backward” as investigating the complement and context |
+| 22–23, L1711–1791 | Searching for relations within a local group and subsequently testing classification; accuracy matched the baseline proportion | A local pattern does not guarantee transfer |
+| 24–26, L1799–1937 | Attempts to recover position within a region, repeated search, a combined algorithm, and setting selection | Clarify the target unknown; separate tuning from final evaluation |
+| 27–28, L1943–2009 | Investigating outside cases; checking a relation in two ways | Use discrepancies and independent implementations to test a claim |
+| 29–31, L2015–2152 | Three application variants: priority, filter, and strategy; empty groups, artificial control, and an ambiguous acceleration metric | Verify the population, cost, and useful application outcome |
+| 32–34, L2158–2203 | Multiple branches following a ToT request: bit positions, output constraints, an additional condition | Branching organizes research but does not prove hypotheses |
+| L2210–2329 | Checking several current outside records; explicitly asking which unknowns are missing | Demonstration on new examples does not replace the final test of obtaining an unknown |
+| 35–38, L2335–2457 | Analysis of an individual input component; correcting the meaning of the dependency and the distinction between direct distances and vector search | First agree on the mapping being tested |
+| 39–41, L2462–2674 | Excluding candidates by an output condition, an attempted preliminary filter, comparing regions, questions about the number of possibilities; the agent's erroneous interpretations | The exclusion criterion, selection conditions, and null model are critical to the conclusion |
 
-## Какие ужесточения вы применяете
+## Which Stricter Requirements You Apply
 
-Ужесточение в журнале возникает в ответ на конкретный сбой. Это механизм управления качеством исследования, а не постоянно расширяемый список запретов.
+Stricter requirements in the journal arise in response to a specific failure. This is a research quality control mechanism, not an ever-expanding list of prohibitions.
 
-| Сбой | Ваше ужесточение | Переносимое правило |
+| Failure | Your stricter requirement | Transferable rule |
 |---|---|---|
-| Агент действует вместо анализа истории | «Такую задачу не давал», «мы в R&D, а не генерим код», отдельная рабочая область | Сверить разрешённое действие; чтение истории само по себе не разрешает её продолжение |
-| Агент выдаёт привычный ответ вместо проверки наблюдения | Только полученные данные; повторное напоминание «от обратного» | Не закрывать проверяемый вопрос ссылкой на память; не подменять проверку согласием |
-| Агент пересказывает график | Требование зависимости, формулы, вероятности и проверки в коде | Из наблюдения сформулировать проверяемое отношение |
-| Операция не соответствует запросу | Вопросы «что именно предсказываешь», «что такое корпус», требование выбранного инструмента | Проверить входы, выходы, пространство поиска и фактический алгоритм |
-| Успех оказался известным ответом или близостью | Явное полное совпадение, отдельный контроль, дальнейшие проверки | Не менять критерий успеха после результата; проверять доступность информации |
-| Исследование не приближает практическую цель | «Что это улучшает и в каком процессе», три раздельные проверки | Указать изменяемую операцию и измерить конечную пользу |
-| Эксперимент большой и непрозрачный | Файлы вместо длинных inline запусков; понятная цель; масштабирование соразмерно вычислениям | Делать исполняемый шаг обозримым и ограниченным по ресурсам |
-| Понятие «коридор» сменило смысл | Уточнение, что сопоставляется и каким методом | Не переносить термин между разными объектами и метриками |
-| Фильтр выглядит успешным | Вопросы о rejected/admissible, условиях принятия, реальности данных и выигрыша | Проверять определение события, контроль и стоимость, а не процент отброшенных сам по себе |
+| The agent acts instead of analyzing the history | “I did not assign that task,” “we are doing R&D, not generating code,” a separate workspace | Check the authorized action; reading history does not itself authorize continuing it |
+| The agent gives a familiar answer instead of testing the observation | Only the obtained data; repeated reminder to work backward | Do not close a testable question with an answer from memory; do not replace verification with agreement |
+| The agent restates the chart | Requiring a dependency, formula, probability, and verification in code | Formulate a testable relation from the observation |
+| The operation does not match the request | Questions such as “what exactly are you predicting” and “what is the corpus”; requiring the selected tool | Check inputs, outputs, search space, and the actual algorithm |
+| Success turns out to be a known answer or proximity | Explicit exact matching, separate control, further checks | Do not change the success criterion after seeing the result; check information availability |
+| Research does not advance the practical objective | “What does this improve and in which process,” three separate checks | Identify the operation that changes and measure the resulting benefit |
+| The experiment is large and opaque | Files instead of long inline runs; a clear objective; scaling proportionate to computation | Make the executable step inspectable and resource-bounded |
+| The meaning of “corridor” changes | Clarifying what is compared and by which method | Do not carry a term across different objects and metrics |
+| A filter appears successful | Questions about rejected/admissible cases, acceptance conditions, whether data and gains are real | Check the event definition, control, and cost, not the rejected percentage alone |
 
-Абсолютные формулировки из конкретного спора не превращены в общие запреты науки. Например, «всё, что ты знаешь, неверно» перенесено как требование не заменять наблюдения неподтверждённым ответом из памяти. Отказ от логики, корректных размерностей и проверяемых спецификаций из этого не следует. Новые объяснения допустимы как явно обозначенные гипотезы — это согласуется с вашим запросом нескольких вариантов (L2158).
+Absolute statements from a specific dispute were not turned into general prohibitions on science. For example, “everything you know is wrong” was transferred as a requirement not to replace observations with an unsupported answer from memory. It does not imply rejecting logic, correct dimensions, or verifiable specifications. New explanations are allowed as explicitly identified hypotheses, consistent with your request for multiple variants (L2158).
 
-## Что означает «от обратного» и когда его выполнять
+## What “Working Backward” Means and When to Do It
 
-В журнале это не один приём. Нужно сначала определить направление перехода.
+The journal contains more than one technique. First determine the direction of the transition.
 
-| Вариант | Когда возникает | Что делать | Чего он ещё не доказывает |
+| Variant | When it arises | What to do | What it does not yet prove |
 |---|---|---|---|
-| От наблюдения к объяснению | Паттерн виден, источник неясен; L1106, L1368 | Найти записи, условия и конкурирующие объяснения; определить различающую проверку | Что первое подходящее объяснение истинно |
-| От результата к неизвестным входам | Есть область выходов, но нет способа получить новый объект; L1610, L2281, L2335 | Задать прямое отображение, известный контекст и неизвестные; исследовать допустимые входы | Что описание выхода обратимо или что восстановленный вход единственен |
-| От внешней области к объяснению внутренней | Область установлена и нужно понять исключения; L1551, L1943 | Определить принадлежность, сопоставить реальные внутренние и внешние случаи в совместимых режимах | Что всё снаружи невалидно или что различие причинное |
-| От исключения к допустимому множеству | Нужно сузить выбор входов; L2462–2469 | Установить правило исключения, квантор, проверенную область и риск потерять допустимый вариант | Что отсутствие успеха в небольшой выборке доказывает невозможность успеха вообще |
-| Обратно к рабочему направлению | Получено обратное ограничение; L1551, L2517–2547 | Применить его к новым реальным случаям и проверить исходную задачу и стоимость | Что уменьшение числа кандидатов автоматически означает ускорение |
+| From observation to explanation | A pattern is visible but its source is unclear; L1106, L1368 | Find records, conditions, and competing explanations; identify a discriminating test | That the first suitable explanation is true |
+| From the result to unknown inputs | An output region is available, but there is no way to obtain a new object; L1610, L2281, L2335 | Define the forward mapping, known context, and unknowns; investigate admissible inputs | That an output description is invertible or that a recovered input is unique |
+| From the outside region to an explanation of the inside | A region is established and exceptions need to be understood; L1551, L1943 | Define membership, compare real inside and outside cases under compatible regimes | That everything outside is invalid or that the difference is causal |
+| From exclusion to the admissible set | Input choices need to be narrowed; L2462–2469 | Establish the exclusion rule, quantifier, tested domain, and risk of losing an admissible option | That absence of success in a small sample proves impossibility of success in general |
+| Back to the operational direction | A backward constraint has been obtained; L1551, L2517–2547 | Apply it to new real cases and test the original task and cost | That reducing the number of candidates automatically means acceleration |
 
-Общая запись для второго и четвёртого вариантов:
+A general expression for the second and fourth variants:
 
-`y = f(x, c)` — прямое отображение; `c` — известный контекст; `x` — неизвестное; `C(y,c)` — проверяемое условие выхода.
+`y = f(x, c)` is the forward mapping; `c` is the known context; `x` is the unknown; `C(y,c)` is the testable output condition.
 
-Исследуем `S(c) = {x : C(f(x,c),c)}`. Это **формализация операции**, а не найденная в журнале новая предметная формула. Если `S` пока нельзя вычислить, это и есть нерешённая часть исследования. Эмпирическая область выходов может задавать только вероятностное ограничение. Без проверки нельзя считать её необходимым условием и отбрасывать всё снаружи.
+Investigate `S(c) = {x : C(f(x,c),c)}`. This is a **formalization of the operation**, not a new domain formula discovered in the journal. If `S` cannot yet be computed, that is the unresolved part of the research. An empirical output region may provide only a probabilistic constraint. Without verification, it cannot be treated as a necessary condition that justifies discarding everything outside it.
 
-Принципы применения:
+Application principles:
 
-1. Сохранить исходную цель; явно назвать, какое отображение или дополнение исследуется.
-2. Зафиксировать известные величины и разрешённые изменения. Не объявлять исторический выход доступным входом будущего решения.
-3. Указать силу проверки: «существует», «для всех», «найдено среди проверенных». Эти утверждения не взаимозаменяемы.
-4. Сопоставлять совместимые совокупности и механизм отбора. Контрольные искусственные данные допустимы как обозначенный контроль, но не как замена реальным фактам.
-5. Вернуться к прямой проверке: получаем ли нужный новый результат при первоначальном критерии и оправданной стоимости?
+1. Preserve the original objective; explicitly name the mapping or complement being investigated.
+2. Record known quantities and permitted changes. Do not declare a historical output to be an available input for a future solution.
+3. State the strength of the test: “there exists,” “for all,” or “found among the tested cases.” These claims are not interchangeable.
+4. Compare compatible populations and selection mechanisms. Artificial control data are allowed as an identified control, not as a replacement for real facts.
+5. Return to forward verification: do we obtain the required new result under the original criterion and at a justified cost?
 
-Это не следует автоматически называть «доказательством от противного»: такое название требует дедуктивного противоречия из явно принятых посылок.
+This should not automatically be called “proof by contradiction”: that name requires a deductive contradiction from explicitly accepted premises.
 
-## Научные названия
+## Scientific Names
 
-Научная литература подтверждает составляющие. Соответствие вашему процессу — результат данного разбора, а не утверждение авторов о вашей работе.
+Scientific literature supports the components. Their correspondence to your process is the result of this analysis, not a claim made by those authors about your work.
 
-| Составляющая | Подтверждённое название и источник | Ограничение |
+| Component | Verified name and source | Limitation |
 |---|---|---|
-| Наблюдения, графики, распределения, аномалии | Exploratory Data Analysis, [NIST](https://www.itl.nist.gov/div898/handbook/eda/section1/eda11.htm) | Обнаружение структуры не равно подтверждению |
-| Объяснение наблюдаемого результата | Абдукция, [Peirce, Harvard lectures, 1903](https://peirce.sitehost.iu.edu/ep/ep2/headers/ep2headx.htm) | Объяснение остаётся гипотезой |
-| Альтернативы и различающие эксперименты | Strong Inference, [Platt, 1964](https://worthylab.org/wp-content/uploads/2019/05/platt1964.pdf) | Число запусков само по себе не означает strong inference |
-| Разделение поиска и подтверждения | Exploratory/confirmatory research, [Nosek et al., 2018](https://psychologicalsciences.unimelb.edu.au/__data/assets/pdf_file/0007/2888098/The-preregistration-revolution.pdf) | Локальный план не следует объявлять официальной preregistration |
-| Восстановление параметров по результатам | Inverse Problem, [Tarantola, 2005](https://epubs.siam.org/doi/10.1137/1.9780898717921.ch1) | Нужны прямое отношение и неизвестные; обратимость не гарантирована |
-| Исключение значений по явным отношениям | Constraint satisfaction / consistency enforcement, [Mackworth, 1977](https://www.cs.ubc.ca/~mack/Publications/AI77.pdf) | Выборочный фильтр не становится доказательно корректным алгоритмом исключения |
-| Защита проверки от доступного ответа и будущей информации | Leakage control, [Kapoor & Narayanan](https://arxiv.org/abs/2207.07048) | Одного разбиения и исключения self-match недостаточно |
-| Многократный подбор и честная итоговая оценка | Model-selection bias, [Cawley & Talbot, 2010](https://www.jmlr.org/papers/v11/cawley10a.html) | Лучший результат на многократно просмотренном тесте нуждается в независимой проверке |
-| Ветвление по вашему отдельному запросу | Tree of Thoughts, [Yao et al., 2023](https://arxiv.org/abs/2305.10601) | Организует варианты, но не является доказательством научного открытия |
+| Observations, charts, distributions, anomalies | Exploratory Data Analysis, [NIST](https://www.itl.nist.gov/div898/handbook/eda/section1/eda11.htm) | Discovering structure is not confirmation |
+| Explaining an observed result | Abduction, [Peirce, Harvard lectures, 1903](https://peirce.sitehost.iu.edu/ep/ep2/headers/ep2headx.htm) | An explanation remains a hypothesis |
+| Alternatives and discriminating experiments | Strong Inference, [Platt, 1964](https://worthylab.org/wp-content/uploads/2019/05/platt1964.pdf) | The number of runs alone does not constitute strong inference |
+| Separating discovery and confirmation | Exploratory/confirmatory research, [Nosek et al., 2018](https://psychologicalsciences.unimelb.edu.au/__data/assets/pdf_file/0007/2888098/The-preregistration-revolution.pdf) | A local plan should not be declared formal preregistration |
+| Recovering parameters from results | Inverse Problem, [Tarantola, 2005](https://epubs.siam.org/doi/10.1137/1.9780898717921.ch1) | A forward relation and unknowns are required; invertibility is not guaranteed |
+| Excluding values using explicit relations | Constraint satisfaction / consistency enforcement, [Mackworth, 1977](https://www.cs.ubc.ca/~mack/Publications/AI77.pdf) | A sample-based filter does not become a provably sound exclusion algorithm |
+| Protecting evaluation from an available answer and future information | Leakage control, [Kapoor & Narayanan](https://arxiv.org/abs/2207.07048) | A split and self-match exclusion alone are insufficient |
+| Repeated tuning and unbiased final evaluation | Model-selection bias, [Cawley & Talbot, 2010](https://www.jmlr.org/papers/v11/cawley10a.html) | The best result on a repeatedly inspected test set requires independent verification |
+| Branching following your separate request | Tree of Thoughts, [Yao et al., 2023](https://arxiv.org/abs/2305.10601) | Organizes alternatives but does not prove a scientific discovery |
 
-В проверенных источниках не установлен единый общепринятый термин для **всей** комбинации. Название skill `evidence-driven-rd` — описательное рабочее имя, не заявленный научный стандарт. Для исследования внешней области также сохранено буквальное описание операции, без придуманного авторитетного названия.
+The checked sources do not establish a single generally accepted term for the **entire** combination. The skill name `evidence-driven-rd` is a descriptive working name, not a claimed scientific standard. Investigation of the outside region also retains a literal description of the operation, without an invented authoritative name.
 
-## Критическая проверка достоверности процесса
+## Critical Verification of the Process's Validity
 
-Нельзя строить skill только по словам «доказано» из ответов агента: в журнале есть взаимоисключающие интерпретации.
+The skill cannot be built solely from the word “proved” in the agent's responses: the journal contains mutually contradictory interpretations.
 
-**Пример 1: критерий успеха.** В L248 успех — полное совпадение. В L328 после нуля совпадений агент переводит обсуждение на среднюю близость. Близость может быть дополнительной метрикой, но первоначальная задача ею не выполнена.
+**Example 1: success criterion.** In L248, success means an exact match. In L328, after zero matches, the agent shifts the discussion to average proximity. Proximity may be an additional metric, but it does not fulfill the original task.
 
-**Пример 2: поиск и прогноз.** В L518 все точные совпадения получены при наличии самих ответов в полном корпусе. Это подтверждает извлечение известной записи. В L534 исключён непосредственный ответ, но будущие записи остались; L577 прямо сообщает соседей из будущего. Для ретроспективного анализа это допустимо; для будущего прогноза нужен другой контракт доступности информации.
+**Example 2: retrieval and prediction.** In L518, all exact matches are obtained with the answers themselves present in the full corpus. This confirms retrieval of a known record. In L534, the direct answer is excluded, but future records remain; L577 explicitly reports neighbors from the future. This is permissible for retrospective analysis; future prediction requires a different information-availability contract.
 
-**Пример 3: отобранная история и случайное пространство.** L977 и L1587 показывают разные покрытия одной области на разных временных совокупностях. В конце агент использует 91,73% исторически выбранных пар как долю всех возможных выходов (L2597, L2674). Этот переход не обоснован.
+**Example 3: selected history and a random space.** L977 and L1587 show different coverage of the same region in different temporal populations. At the end, the agent uses 91.73% of historically selected pairs as the proportion of all possible outputs (L2597, L2674). That transition is unsupported.
 
-Для проверки последнего рассуждения выполнен отдельный **математический контроль**, не новый предметный эксперимент. При предположении равномерного независимого 256-битного выхода расстояние до фиксированного вектора имеет биномиальное распределение. Формула модели приведена в [NIST](https://itl.nist.gov/div898/handbook/eda/section3/eda366i.htm).
+A separate **mathematical control**, not a new domain experiment, was performed to check the latter reasoning. Under the assumption of uniform independent 256-bit output, the distance to a fixed vector follows a binomial distribution. The model formula is provided by [NIST](https://itl.nist.gov/div898/handbook/eda/section3/eda366i.htm).
 
-Для записанного условия `[69,109]`:
+For the recorded condition `[69,109]`:
 
-`p = Σ(k=69..109) C(256,k) / 2^256 ≈ 1,02847%`.
+`p = Σ(k=69..109) C(256,k) / 2^256 ≈ 1.02847%`.
 
-Тогда:
+Then:
 
-- хотя бы одно попадание из 10: `1−(1−p)^10 ≈ 9,82156%`;
-- хотя бы пять попаданий из 100: `Σ(j=5..100) C(100,j)p^j(1−p)^(100−j) ≈ 0,38630%`.
+- at least one hit out of 10: `1−(1−p)^10 ≈ 9.82156%`;
+- at least five hits out of 100: `Σ(j=5..100) C(100,j)p^j(1−p)^(100−j) ≈ 0.38630%`.
 
-В журнале записаны 9,92% и около 0,37%. Их близость к этому контролю означает, что сами эти доли **не являются достаточным свидетельством новой зависимости**. Она также не доказывает ни полную корректность кода, ни отсутствие любой зависимости. Реальное соответствие генератора предположениям модели требует отдельной проверки.
+The journal records 9.92% and approximately 0.37%. Their proximity to this control means that these proportions alone **are not sufficient evidence of a new dependency**. It also proves neither complete code correctness nor the absence of any dependency. Whether the actual generator satisfies the model assumptions requires a separate check.
 
-Поэтому нельзя принять ни исходное «прорыв», ни последующее «значит баг» как подтверждённый итог. Наблюдаемые числа, модель контроля и интерпретация — три разных уровня.
+Therefore, neither the original “breakthrough” nor the subsequent “therefore a bug” can be accepted as a confirmed outcome. Observed numbers, the control model, and interpretation are three different levels.
 
-**Пример 4: выигрыш.** В L2596 стоимость полного расчёта прямо помечена `simulated` и выводится из времени фильтра. Это не измеренная полная производительность. Доля отброшенных кандидатов не сообщает, сколько полезных решений потеряно. В L2094 отрицательные примеры искусственные; это не готовое доказательство эффективности на реальном операционном потоке.
+**Example 4: improvement.** In L2596, the cost of the full computation is explicitly marked `simulated` and derived from filter timing. It is not measured full performance. The proportion of rejected candidates does not say how many useful solutions are lost. In L2094, negative examples are artificial; this is not sufficient proof of effectiveness on a real operational stream.
 
-**Пример 5: область и её размер.** В L2653 среднее расстояние до соседа превращено в радиус единого шара допустимых значений. Такое преобразование в журнале не доказано. Нельзя считать пространство допустимых входов по средней метрике сходства без определения самого множества.
+**Example 5: a region and its size.** In L2653, the average distance to a neighbor is turned into the radius of a single ball of admissible values. That transformation is not proved in the journal. An admissible input space cannot be counted from an average similarity metric without defining the set itself.
 
-Это не попытка решить заново предметную задачу. Примеры нужны, чтобы skill воспроизводил ваши требования к исследованию и не закреплял ошибки агента как нормы.
+This is not an attempt to solve the domain task again. The examples ensure that the skill reproduces your research requirements and does not institutionalize the agent's errors as norms.
 
-## Что вошло в skill
+## What Was Included in the Skill
 
-`SKILL.md` содержит общий цикл, правила усиления при конкретном сбое, четыре операции «от обратного» и обязательный возврат к прямой проверке. `references/scientific-methods.md` содержит названия с границами применимости. `references/process-evidence.md` связывает правила со строками истории и хранит предметные случаи только как примеры.
+`SKILL.md` contains the general cycle, rules for tightening requirements after specific failures, four backward operations, and a mandatory return to forward verification. `references/scientific-methods.md` contains names and their applicability boundaries. `references/process-evidence.md` connects rules to historical lines and retains domain cases only as examples.
 
-Не введены обязательные FAISS, блокчейн, 80/20, 256 бит, Фибоначчи, конкретные имена файлов, число этапов или всеобщая необходимость ToT. Не введено постоянное согласование каждого шага. Сохраняется фактически разрешённая область работы; существенная неоднозначность разрешается до реализации.
+No mandatory FAISS, blockchain, 80/20 split, 256 bits, Fibonacci, specific file names, stage count, or universal need for ToT was introduced. No permanent requirement to approve every step was introduced. The actually authorized scope is preserved; material ambiguity is resolved before implementation.
 
-Некоторые защитные формулировки — явно инженерные следствия выявленных сбоев, а не дословные исторические правила: эквивалентный контроль для nearest-of-many, независимая проверка после многократного подбора и пересмотр зависимых выводов после опровержения предпосылки. Их основания указаны в references. Это минимальные ограничения достоверности, а не выдуманные результаты исследования.
+Some safeguards are explicitly engineering consequences of the identified failures, rather than verbatim historical rules: an equivalent control for nearest-of-many, independent verification after repeated tuning, and revisiting dependent conclusions after a premise is refuted. Their bases are identified in the references. These are minimal validity constraints, not invented research results.
 
-## План реализации и критерии приёмки
+## Implementation Plan and Acceptance Criteria
 
-Выполнено: восстановить структуру и происхождение требований → проверить научные соответствия → отделить общие правила от примеров → создать skill через skill-creator → проверить структуру и поведение на контрольных сценариях → подготовить установку в личный каталог skills.
+Completed: reconstruct the structure and provenance of requirements → verify scientific correspondences → separate general rules from examples → create the skill through skill-creator → check structure and behavior using control scenarios → prepare installation in the personal skills directory.
 
-Критерии:
+Criteria:
 
-- правило связано с реальным требованием или конкретно выявленным дефектом;
-- тематические детали не становятся общими обязанностями;
-- гипотеза, наблюдение, вывод и практическая проверка разделены;
-- «от обратного» имеет явные входы, операцию, силу утверждения и прямую проверку;
-- научное название имеет публичный источник и оговорённое соответствие;
-- неподтверждённые результаты и противоречия не замалчиваются;
-- skill структурно валиден; проверка структуры не объявляется доказательством эффективности.
+- each rule is connected to a real requirement or a specifically identified defect;
+- topic-specific details do not become general obligations;
+- hypothesis, observation, conclusion, and practical verification are separated;
+- “working backward” has explicit inputs, operation, claim strength, and forward verification;
+- each scientific name has a public source and a qualified correspondence;
+- unsupported results and contradictions are not concealed;
+- the skill is structurally valid; structural verification is not presented as proof of effectiveness.
 
-Риски: одна история не доказывает полноту процесса для всех будущих R&D; авторство и подлинность исходных предметных данных здесь независимо не проверены; поведенческая проверка является ручной проверкой сценариев, а не отдельным прогоном другой модели. Skill рассчитан на дальнейшее уточнение только по реальным случаям использования.
+Risks: one history does not prove that the process is complete for all future R&D; authorship and authenticity of the original domain data were not independently checked here; behavioral verification is a manual scenario review, not a separate run by another model. The skill is intended for further refinement only through real use cases.

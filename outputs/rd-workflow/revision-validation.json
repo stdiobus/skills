@@ -1,0 +1,62 @@
+{
+  "structural_supplement": {
+    "status": "PASS",
+    "checks": [
+      "strict-name-and-directory",
+      "parsed-folded-description",
+      "official-optional-fields-and-project-license",
+      "body-sections-and-line-limit",
+      "every-reference-has-own-conditional-trigger",
+      "all-relative-links-and-runtime-resources-resolve",
+      "twenty-schema-valid-balanced-evals-with-existing-inputs",
+      "existing-ui-metadata-and-implicit-selection-preserved",
+      "existing-domain-evidence-preserved-byte-for-byte; installed-Russian-UI-preserved"
+    ],
+    "description_characters": 749,
+    "description_utf8_bytes": 814,
+    "skill_lines": 102
+  },
+  "indexer_tests": {
+    "status": "PASS",
+    "cases": [
+      "totals/digest",
+      "pagination",
+      "unicode/truncation",
+      "duplicates",
+      "repeatability/no text by default",
+      "totals only",
+      "invalid records/no partial output",
+      "negative argument",
+      "missing file"
+    ],
+    "input_kind": "synthetic unit-test fixture, not R&D evidence"
+  },
+  "description_evals": {
+    "status": "AUTHORED_AND_SCHEMA_VALIDATED",
+    "positive": 10,
+    "negative_near_misses": 10,
+    "train": 12,
+    "validation": 8,
+    "runs": 0,
+    "observed_trigger_rates": null
+  },
+  "behavior_evals": {
+    "status": "AUTHORED_NOT_EXECUTED_IN_FRESH_AGENT_CONTEXTS",
+    "artifact_backed_cases": [
+      1,
+      2,
+      3
+    ],
+    "pass_rate": null
+  },
+  "validator_limits": [
+    "Repository validator emits grep option warning; its check was supplemented with strict name regex and complete YAML parsing.",
+    "System quick_validate.py rejects compatibility even though the current Agent Skills specification explicitly permits it."
+  ],
+  "installation": {
+    "status": "PASS",
+    "path": "/Users/etc/.codex/skills/evidence-driven-rd",
+    "files_verified": 12,
+    "matches_repository_export_zip": true
+  }
+}

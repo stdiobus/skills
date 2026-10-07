@@ -1,3 +1,5 @@
+> This records the original version. Current revision and verification: [spec-compliance.md](spec-compliance.md) and [revision-validation.json](revision-validation.json).
+
 # Validation
 
 Date: 2026-10-07.
