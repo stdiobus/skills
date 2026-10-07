@@ -1,0 +1,104 @@
+{
+  "skill_name": "create-skill",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a skill called 'data-pipeline' that teaches agents how to run our ETL scripts",
+      "expected_output": "Full skill created in .agents/skills/data-pipeline/: SKILL.md with frontmatter, procedure, Gotchas, Validation. evals/evals.json with ≥5 cases. validate-frontmatter.sh run and all checks pass.",
+      "should_trigger": true,
+      "assertions": [
+        "Skill directory and SKILL.md are created",
+        "frontmatter name field matches directory name exactly",
+        "SKILL.md has ## Gotchas section",
+        "SKILL.md has ## Validation section",
+        "evals/evals.json exists with at least 2 should_trigger:false near-miss cases",
+        "validate-frontmatter.sh is run and reports all checks passed"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "This flat file docs/api-reference.md needs to be a proper skill so agents can use it",
+      "expected_output": "Flat file converted to proper skill structure. SKILL.md created with frontmatter, description, procedure. Detail tables moved to references/. evals added. validate-frontmatter.sh passes.",
+      "should_trigger": true,
+      "assertions": [
+        "SKILL.md is created with valid frontmatter",
+        "Tables longer than 10 rows are moved to references/ with conditional triggers",
+        "validate-frontmatter.sh reports all checks passed"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Audit the failure-handling skill — does it fully comply with the agentskills.io spec?",
+      "expected_output": "validate-frontmatter.sh run first. Each failed check identified and fixed. Script re-run to confirm all pass.",
+      "should_trigger": true,
+      "assertions": [
+        "validate-frontmatter.sh is run before any edits",
+        "Each failed check is addressed",
+        "validate-frontmatter.sh re-run after edits shows all checks passed"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "The discovery-and-routing skill description isn't triggering reliably on agent routing questions",
+      "expected_output": "Description revised with imperative phrasing, implicit triggers, and near-miss exclusions. Character count verified < 1024.",
+      "should_trigger": true,
+      "assertions": [
+        "Revised description uses imperative phrasing",
+        "Implicit trigger phrases added",
+        "Character count checked and confirmed < 1024"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Add eval test cases to the configuration skill — it currently has none",
+      "expected_output": "evals/evals.json created with ≥3 should-trigger and ≥2 should-not-trigger near-miss cases. Each case has assertions.",
+      "should_trigger": true,
+      "assertions": [
+        "evals/evals.json has at least 3 should_trigger:true cases",
+        "evals/evals.json has at least 2 should_trigger:false cases that are near-misses",
+        "Each eval has an assertions array"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "turn this into a proper skill",
+      "expected_output": "Skill activates — implicit trigger 'turn this into a proper skill' matches the description. Source material (current file context) is read before writing.",
+      "should_trigger": true,
+      "assertions": [
+        "Source material is read before SKILL.md is written",
+        "validate-frontmatter.sh is run at the end"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Implement the sessions_cancel handler in src/mcp/tools/sessions.ts",
+      "expected_output": "Skill does NOT activate — this is a code implementation task, not skill creation.",
+      "should_trigger": false,
+      "assertions": [
+        "No SKILL.md is created",
+        "No validate-frontmatter.sh is run",
+        "Handler is implemented in the source file directly"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Update the README to document the new Factory API",
+      "expected_output": "Skill does NOT activate — this is README/documentation writing, not SKILL.md creation.",
+      "should_trigger": false,
+      "assertions": [
+        "No SKILL.md is created",
+        "README.md is edited directly"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "How do I configure backpressure limits in McpAgenticServer?",
+      "expected_output": "Skill does NOT activate — this is a configuration question answered by the configuration skill.",
+      "should_trigger": false,
+      "assertions": [
+        "Routes to configuration skill",
+        "No skill creation workflow is started"
+      ]
+    }
+  ]
+}

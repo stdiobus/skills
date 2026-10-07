@@ -1,0 +1,61 @@
+{
+  "skill_name": "<name — must match SKILL.md name field exactly>",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "<Realistic user message that clearly requires this skill. Include concrete context: file paths, column names, error messages, tool names.>",
+      "expected_output": "<Human-readable description of what success looks like — what the agent should do or produce.>",
+      "should_trigger": true,
+      "assertions": [
+        "<Specific verifiable statement: 'X is called', 'output contains Y', 'file Z is created'>",
+        "<Another assertion — objective, not 'output is good'>"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "<Second should-trigger case — different phrasing, less explicit (user intent without domain keywords).>",
+      "expected_output": "<Description of success.>",
+      "should_trigger": true,
+      "assertions": [
+        "<Assertion>"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "<Edge case — boundary condition, unusual input, or ambiguous instruction the skill must handle correctly.>",
+      "expected_output": "<Description of correct handling for this edge case.>",
+      "should_trigger": true,
+      "assertions": [
+        "<Assertion specific to this edge case>"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "<NEAR-MISS NEGATIVE: shares keywords with this skill but actually needs a different skill. Be specific about the overlap.>",
+      "expected_output": "<Skill does NOT activate. Routes to <other-skill-name> instead.>",
+      "should_trigger": false,
+      "assertions": [
+        "<Verify no tool calls or procedures from this skill are invoked>",
+        "<Verify correct routing>"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "<NEAR-MISS NEGATIVE: another query that shares domain vocabulary but falls outside this skill's scope.>",
+      "expected_output": "<Skill does NOT activate.>",
+      "should_trigger": false,
+      "assertions": [
+        "<Assertion>"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "<Optional: add more cases to reach 20 total for a full description optimization eval set.>",
+      "expected_output": "<Description.>",
+      "should_trigger": true,
+      "assertions": [
+        "<Assertion>"
+      ]
+    }
+  ]
+}

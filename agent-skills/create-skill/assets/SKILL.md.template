@@ -1,0 +1,39 @@
+---
+name: <skill-name>
+description: >
+  Use this skill when <imperative: what the user is trying to achieve>.
+  Also activate when <implicit trigger phrases — what the user says without naming the domain>.
+  Do NOT activate for <near-miss exclusions when adjacent skills share keywords>.
+compatibility: <environment requirements, e.g. "Node.js >= 20. Requires @scope/package." — omit if none>
+license: <project license, e.g. MIT>
+allowed-tools: <space-separated tool names — omit if none>
+---
+
+# <Skill Title>
+
+## <Primary workflow — the step-by-step procedure for this task class>
+
+<Step-by-step numbered list. Each step must be actionable — the agent can execute it directly.
+Include code examples inline. Keep steps focused on what the agent DOES, not what it should know.>
+
+1. <First action — read, check, or call something specific>
+2. <Second action>
+3. <...>
+
+## <Secondary section — patterns, options, or decision rules>
+
+<Tables, decision trees, or specific patterns. Keep tables under 10 rows here.
+Move larger tables to references/.>
+
+## Gotchas
+
+- **<Specific non-obvious fact about this domain>** — <what goes wrong without this, and the correct behaviour>
+- **<Another specific fact>** — <consequence and what to do instead>
+
+## Validation
+
+After <stage 1>: <specific self-check — what to confirm before moving to stage 2>.
+After <stage 2>: <specific self-check>.
+Before finishing: <final verification step>.
+
+Read `references/<detail-file>.md` if <specific condition that requires more detail>.
