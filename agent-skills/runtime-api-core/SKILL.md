@@ -1,13 +1,13 @@
 ---
 name: runtime-api-core
 description: >
-  Exact TypeScript type signatures and field-by-field semantics for the core
-  @worktif/runtime API surface: MicroserviceDefinition, LambdaDefinition,
-  TiesConstructors, LambdaEvent, InitFunction, and related utility types.
   Use this skill when generating type-correct code, understanding the ties
   type transformation system, or verifying that generated code matches the
   actual public API. Covers consumer import paths, generic parameters,
-  field constraints, and finite option sets.
+  field constraints, and finite option sets. Exact TypeScript type signatures
+  and field-by-field semantics for the core @worktif/runtime API surface: 
+  MicroserviceDefinition, LambdaDefinition, TiesConstructors, LambdaEvent, 
+  InitFunction, and related utility types.
 license: Elastic-2.0
 compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
 metadata:

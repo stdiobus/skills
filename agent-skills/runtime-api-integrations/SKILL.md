@@ -1,12 +1,12 @@
 ---
 name: runtime-api-integrations
 description: >
-  Exact configuration interfaces for all 9 supported IntegrationKind values in
+  Use this skill when configuring event sources for Lambda functions, setting up
+  authentication, or verifying that integration configuration is correct.
+  Covers exact configuration interfaces for all 9 supported IntegrationKind values in
   @worktif/runtime: http, sqs, eventbridge, s3, dynamodb, sns, kinesis, schedule,
   and direct. Documents each integration's fields, valid value ranges, and constraints.
   Also covers the 5 AuthConfig discriminated union types for HTTP authentication.
-  Use this skill when configuring event sources for Lambda functions, setting up
-  authentication, or verifying that integration configuration is correct.
 license: Elastic-2.0
 compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
 metadata:

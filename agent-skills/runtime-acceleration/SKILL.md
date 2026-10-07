@@ -1,15 +1,15 @@
 ---
 name: runtime-acceleration
 description: >
-  Product/plugin acceleration for @worktif/runtime — the provider-agnostic
-  "acceleration" seam at the LambdaBuilder chokepoint and its first provider,
-  Lambda Kata (@lambdakata/cdk). Covers the acceleration.kata configuration
+  Use this skill when enabling or configuring acceleration, integrating a product plugin,
+  or reasoning about why acceleration is off by default and how it stays out of the eager
+  module graph. Covers the acceleration.kata configuration
   block (global, per-platform, and per-lambda), the enabled/unlicensedBehavior
   precedence rules, lazy optional-peer-dependency isolation, the synth-time
   transform model, the transformed/skipped/disabled/unknown status tally, and
-  the strict scope (microservice Lambdas only). Use this skill when enabling or
-  configuring acceleration, integrating a product plugin, or reasoning about why
-  acceleration is off by default and how it stays out of the eager module graph.
+  the strict scope (microservice Lambdas only). Product/plugin acceleration for @worktif/runtime —
+  the provider-agnostic "acceleration" seam at the LambdaBuilder chokepoint and its first provider,
+  Lambda Kata (@lambdakata/cdk).
 license: Elastic-2.0
 compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
 metadata:

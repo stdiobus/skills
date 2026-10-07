@@ -1,13 +1,12 @@
 ---
 name: runtime-constraints-and-guardrails
 description: >
-  Centralized reference of all hard constraints, anti-patterns, NOT SUPPORTED
-  declarations, and hard decision rules for @worktif/runtime. Covers Lambda bundle
-  size limits, browser bundle limits, AWS SDK v3 requirement, CDK L2/L3 construct
+  Use this skill when validating generated code, checking for anti-patterns, enforcing framework rules,
+  or determining whether a requested feature is supported, Covers centralized reference of all hard constraints,
+  anti-patterns, NOT SUPPORTED declarations, and hard decision rules for @worktif/runtime.
+  Also covers Lambda bundle size limits, browser bundle limits, AWS SDK v3 requirement, CDK L2/L3 construct
   requirement, dependency externalization rules, architecture boundary rules, and
-  the complete NOT SUPPORTED list. Use this skill when validating generated code,
-  checking for anti-patterns, enforcing framework rules, or determining whether a
-  requested feature is supported.
+  the complete NOT SUPPORTED list.
 license: Elastic-2.0
 compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
 metadata:

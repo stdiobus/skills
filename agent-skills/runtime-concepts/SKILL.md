@@ -1,13 +1,11 @@
 ---
 name: runtime-concepts
 description: >
-  Product definition and core domain concepts for @worktif/runtime — an AWS Lambda
-  serverless framework. Covers what the framework is, what it supports, what it does
-  not support, and the relationships between Microservices, Lambda definitions,
+  Use when reasoning about @worktif/runtime scope and domain model.
+  Covers what the an AWS Lambda serverless framework @worktif/runtime is, what it supports,
+  what it does not support, and the relationships between Microservices, Lambda definitions,
   integration kinds, the Ties dependency injection pattern, the Snapshot cold-start
-  pattern, and the multi-stack CDK deployment model with multi-platform support. Use this skill when encountering
-  @worktif/runtime for the first time or when reasoning about framework scope and
-  domain model.
+  pattern, and the multi-stack CDK deployment model with multi-platform support.
 license: Elastic-2.0
 compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
 metadata:

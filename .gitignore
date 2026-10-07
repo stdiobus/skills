@@ -840,3 +840,4 @@ Temporary Items
 *.smime
 
 sandbox/
+.ai/

@@ -1,15 +1,15 @@
 ---
 name: runtime-multiplatform
 description: >
-  Multi-platform deployment with @worktif/runtime. Covers the
-  RuntimeConfig.platforms array, the PlatformConfig shape (name, awsRegion,
+  Use this skill when deploying the same application to multiple
+  platforms, regions, or AWS accounts from one configuration, or when reasoning
+  about how platform overrides merge with global settings.
+  Covers the RuntimeConfig.platforms array, the PlatformConfig shape (name, awsRegion,
   features, awake, acceleration overrides), the shallow-merge resolution
   semantics against global config, the default-platform sentinel for
   single-platform projects, per-platform resource naming via the platformName
   prop, duplicate-name validation, and the --platform CLI targeting on deploy
-  and destroy. Use this skill when deploying the same application to multiple
-  platforms, regions, or AWS accounts from one configuration, or when reasoning
-  about how platform overrides merge with global settings.
+  and destroy; including multi-platform deployment with @worktif/runtime.
 license: Elastic-2.0
 compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
 metadata:

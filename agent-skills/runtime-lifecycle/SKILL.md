@@ -1,11 +1,11 @@
 ---
 name: runtime-lifecycle
 description: >
-  Complete consumer lifecycle for @worktif/runtime from project initialization through
-  deployment and upgrades. Covers project setup, microservice definition, build commands,
-  CDK deployment, local development, testing, and the upgrade path. Use this skill when
+  Use this skill when
   guiding a consumer through building an application or when orchestrating the correct
-  sequence of development actions.
+  sequence of development actions. Covers project setup, microservice definition, build commands,
+  CDK deployment, local development, testing, and the upgrade path; including complete consumer lifecycle
+  for @worktif/runtime from project initialization through deployment and upgrades. 
 license: Elastic-2.0
 compatibility: Requires @worktif/runtime >=0.5.0 <1.0.0
 metadata:
