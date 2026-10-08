@@ -271,7 +271,7 @@ async function main(): Promise<void> {
       });
     }
 
-    for (const skill of ['create-skill', 'evidence-driven-rd']) {
+    for (const skill of ['create-skill', 'evidence-driven-rd', 'stdiobus-skills-package']) {
       check(`all supporting files are packaged: ${skill}`, () => {
         function verifyDirectory(relative: string): void {
           const source = path.join(PACKAGE_ROOT, 'agent-skills', skill, relative);

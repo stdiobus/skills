@@ -142,7 +142,7 @@ function generateManifest(): any {
 
   return {
     version: '1.0.0',
-    frameworkVersion: '0.5.3-kata.1',
+    frameworkVersion: JSON.parse(fs.readFileSync(path.join(SKILLS_ROOT, 'skills-manifest.json'), 'utf8')).frameworkVersion,
     skills,
     lastValidated: now,
   };
@@ -212,7 +212,7 @@ describe('End-to-End CI Validation Pipeline', () => {
     it('generates a valid manifest object', () => {
       expect(manifest).toBeDefined();
       expect(manifest.version).toBe('1.0.0');
-      expect(manifest.frameworkVersion).toBe('0.5.3-kata.1');
+      expect(manifest.frameworkVersion).toBe(JSON.parse(fs.readFileSync(path.join(SKILLS_ROOT, 'skills-manifest.json'), 'utf8')).frameworkVersion);
     });
 
     it('manifest contains all 17 skills', () => {

@@ -28,6 +28,7 @@ export enum SkillName {
   // General agent workflow collection
   CreateSkill = 'create-skill',
   EvidenceDrivenRd = 'evidence-driven-rd',
+  StdiobusSkillsPackage = 'stdiobus-skills-package',
 
   // stdio Bus SDK collection (3 skills)
   StdiobusSdkCpp = 'stdiobus-sdk-cpp',

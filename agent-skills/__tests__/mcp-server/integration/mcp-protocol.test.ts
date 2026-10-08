@@ -334,7 +334,7 @@ describe('MCP Protocol Integration Tests', () => {
     });
 
 
-    describe.each(['create-skill', 'evidence-driven-rd'])('complete workflow skill: %s', (skill) => {
+    describe.each(['create-skill', 'evidence-driven-rd', 'stdiobus-skills-package'])('complete workflow skill: %s', (skill) => {
       it('is discoverable and every packaged resource is readable over MCP', async () => {
         const listed = await client.sendRequest('tools/call', { name: 'list_skills', arguments: {} });
         expect(JSON.parse(listed.result.content[0].text).skills.map((s: any) => s.name)).toContain(skill);
@@ -345,7 +345,7 @@ describe('MCP Protocol Integration Tests', () => {
         expect(read.result.content[0].text).toBe(fs.readFileSync(path.join(PACKAGE_ROOT, 'agent-skills', skill, 'SKILL.md'), 'utf8'));
         const listedRefs = await client.sendRequest('tools/call', { name: 'list_references', arguments: { skill } });
         const refs: string[] = JSON.parse(listedRefs.result.content[0].text);
-        expect(refs.some((ref) => ref.startsWith('assets/'))).toBe(true);
+        if (skill !== 'stdiobus-skills-package') expect(refs.some((ref) => ref.startsWith('assets/'))).toBe(true);
         expect(refs.some((ref) => ref.startsWith('scripts/'))).toBe(true);
         for (const reference of refs) {
           const response = await client.sendRequest('tools/call', { name: 'read_reference', arguments: { skill, reference } });

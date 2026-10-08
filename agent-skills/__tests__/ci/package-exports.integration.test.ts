@@ -13,7 +13,7 @@ import { SkillName } from '../../types';
 //          access, and MCP server startup from the consumer's perspective.
 // =============================================================================
 
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync, execSync, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -71,7 +71,7 @@ afterAll(() => {
 });
 
 
-it.each(['create-skill', 'evidence-driven-rd'])('ships every resource for %s without changing its contents', (skill) => {
+it.each(['create-skill', 'evidence-driven-rd', 'stdiobus-skills-package'])('ships every resource for %s without changing its contents', (skill) => {
   function checkDirectory(relative: string): void {
     const source = path.join(PACKAGE_ROOT, 'agent-skills', skill, relative);
     for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
@@ -97,6 +97,46 @@ it.each([
     cwd: consumerDir, encoding: 'utf8', timeout: PACK_TIMEOUT,
   }).trim();
   expect(fs.realpathSync(result)).toBe(fs.realpathSync(path.join(installedPkgDir, 'agent-skills', resource)));
+});
+
+describe('installed package consumer verification helper', () => {
+  function helperPath(): string {
+    return path.join(installedPkgDir, 'agent-skills/stdiobus-skills-package/scripts/verify-consumer.mjs');
+  }
+
+  it('checks every installed skill and resource through the real packaged MCP server', () => {
+    const output = execFileSync(process.execPath, [helperPath(), '--package-root', installedPkgDir], {
+      cwd: consumerDir, encoding: 'utf8', timeout: 30_000,
+    });
+    const result = JSON.parse(output);
+    expect(result.delivery).toBe('passed');
+    expect(result.route).toBe('direct MCP stdio');
+    expect(result.checkedSkills.sort()).toEqual(Object.values(SkillName).sort());
+    expect(result.exportFailures).toEqual([]);
+    expect(result.resourcesChecked).toBeGreaterThan(0);
+    expect(result.agentBehavior).toBe('not measured');
+    expect(result.stdioBusRoute).toBe('not tested by this helper');
+  });
+
+  it('documents noninteractive usage', () => {
+    const result = spawnSync(process.execPath, [helperPath(), '--help'], { encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('--package-root');
+    expect(result.stderr).toBe('');
+  });
+
+  it.each([
+    { args: [] as string[] },
+    { args: ['--unknown-option'] },
+    { args: ['--package-root', '/a/nonexistent/package/root'] },
+    { args: ['--package-root', 'INSTALLED', '--skill', '__missing_skill__'] },
+  ])('fails explicitly for invalid consumer input %j', ({ args }) => {
+    const actual = args.map((arg) => arg === 'INSTALLED' ? installedPkgDir : arg);
+    const result = spawnSync(process.execPath, [helperPath(), ...actual], { encoding: 'utf8', timeout: 15_000 });
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('verify-consumer:');
+  });
 });
 
 describe('Package Exports & Tarball Verification', () => {
@@ -185,7 +225,7 @@ describe('Package Exports & Tarball Verification', () => {
       );
       const data = JSON.parse(result);
       expect(data.v).toBe('1.0.0');
-      expect(data.fv).toBe('0.5.3-kata.1');
+      expect(data.fv).toBe(JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, 'agent-skills/skills-manifest.json'), 'utf8')).frameworkVersion);
       expect(data.count).toBe(Object.values(SkillName).length);
     });
   });

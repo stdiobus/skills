@@ -23,11 +23,11 @@ it('delivers both workflow skills and every supporting resource through native s
     }
     const manifest = JSON.parse(await call('list_skills'));
     expect(manifest.skills.map((s: any) => s.name).sort()).toEqual(Object.values(SkillName).sort());
-    for (const skill of ['create-skill', 'evidence-driven-rd']) {
+    for (const skill of ['create-skill', 'evidence-driven-rd', 'stdiobus-skills-package']) {
       expect(JSON.parse(await call('search_skills', { query: skill })).map((s: any) => s.skill)).toContain(skill);
       expect(await call('read_skill', { skill })).toBe(fs.readFileSync(path.join(root, 'agent-skills', skill, 'SKILL.md'), 'utf8'));
       const resources: string[] = JSON.parse(await call('list_references', { skill }));
-      expect(resources.some((ref) => ref.startsWith('assets/'))).toBe(true);
+      if (skill !== 'stdiobus-skills-package') expect(resources.some((ref) => ref.startsWith('assets/'))).toBe(true);
       expect(resources.some((ref) => ref.startsWith('scripts/'))).toBe(true);
       for (const reference of resources) {
         const prefixed = /^(assets|scripts|evals|agents)\//.test(reference);

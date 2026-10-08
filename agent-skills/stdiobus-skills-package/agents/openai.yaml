@@ -1,0 +1,4 @@
+interface:
+  display_name: "stdio Bus Skills Package"
+  short_description: "Use the npm package through MCP, stdio Bus, and ESM"
+  default_prompt: "Apply $stdiobus-skills-package to inspect the installed @stdiobus/skills version, choose its supported access route, read the needed skill resources, and verify actual delivery."

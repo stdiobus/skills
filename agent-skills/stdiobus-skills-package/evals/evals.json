@@ -1,0 +1,227 @@
+{
+  "skill_name": "stdiobus-skills-package",
+  "evals": [
+    {
+      "id": 1,
+      "split": "train",
+      "prompt": "Install @stdiobus/skills in this npm consumer and connect it to our existing MCP host. We need reproducible launch configuration.",
+      "expected_output": "Inspect the consumer and registry, preserve its manager/lockfile, select and pin the requested compatible release, and verify the configured route.",
+      "should_trigger": true,
+      "assertions": [
+        "Records the actual npm package version separately from the handshake version.",
+        "Uses the executable bin or resolved mcp-server export, with separate command and args.",
+        "Does not require building this repository for an installed release."
+      ]
+    },
+    {
+      "id": 2,
+      "split": "train",
+      "prompt": "I installed @stdiobus/skills@1.1.1, but read_skill rejects evidence-driven-rd. Make the agent able to find the right instructions without silently changing my package version.",
+      "expected_output": "Discover the running catalog, identify the stable/RC capability gap, and explain available authorized options without pretending the missing skill exists.",
+      "should_trigger": true,
+      "assertions": [
+        "Checks list_skills on the running connection.",
+        "Identifies that the checked 1.1.1 does not contain evidence-driven-rd.",
+        "Does not silently switch to RC or patch node_modules."
+      ]
+    },
+    {
+      "id": 3,
+      "split": "train",
+      "prompt": "read_reference works but require.resolve for @stdiobus/skills/skills/runtime-patterns-http/references/templates/single-get.ts throws ERR_PACKAGE_PATH_NOT_EXPORTED in 1.1.1.",
+      "expected_output": "Inspect the installed export map and use verified MCP reading or an explicitly version-specific physical file fallback.",
+      "should_trigger": true,
+      "assertions": [
+        "Distinguishes the stable two-wildcard export defect from a missing reference file.",
+        "Uses a listed MCP resource path without the references/ prefix.",
+        "Does not import the template as JavaScript."
+      ]
+    },
+    {
+      "id": 4,
+      "split": "train",
+      "prompt": "let the agent read the correct packaged template; the worker is already connected and I do not want another server process",
+      "expected_output": "Reuse the existing MCP connection, discover a suitable skill, read it, list resources, and load only the relevant template.",
+      "should_trigger": true,
+      "assertions": [
+        "Reuses the existing connection.",
+        "Reads SKILL.md before selecting conditional resources.",
+        "Checks isError and decodes only JSON-returning tools as JSON."
+      ]
+    },
+    {
+      "id": 5,
+      "split": "train",
+      "prompt": "Our stdio Bus application needs @stdiobus/skills as a worker. Show and verify the installed-package route, not a path into your checkout.",
+      "expected_output": "Use the existing StdioBus pool and installed executable resolution; preserve connection ownership and verify requests through the bus.",
+      "should_trigger": true,
+      "assertions": [
+        "Resolves @stdiobus/skills/mcp-server from the consumer.",
+        "Keeps initialization and tool calls on the same worker/session.",
+        "Uses stop and destroy only for an owned bus.",
+        "Does not claim a direct subprocess test proves the bus route."
+      ]
+    },
+    {
+      "id": 6,
+      "split": "train",
+      "prompt": "Can I import createFileResolver and instantiate Skill from @stdiobus/skills? I need to read files in my ESM app.",
+      "expected_output": "Explain the actual public exports and use filesystem reads of resolved exported paths.",
+      "should_trigger": true,
+      "assertions": [
+        "Identifies SkillName as the runtime enum and Skill/SkillManifest as TypeScript-only types.",
+        "Does not invent createFileResolver as a public export.",
+        "Uses ESM and createRequire resolution for text files."
+      ]
+    },
+    {
+      "id": 7,
+      "split": "validation",
+      "prompt": "tools/list shows five tools. How do I search for an applicable skill and load just the references I need?",
+      "expected_output": "Follow discovery, lexical search, applicability checks, explicit skill loading, and conditional resource reads.",
+      "should_trigger": true,
+      "assertions": [
+        "Names all five existing tools with their real argument shapes.",
+        "Does not describe search as embeddings or semantic retrieval.",
+        "Preserves the exact listed reference path."
+      ]
+    },
+    {
+      "id": 8,
+      "split": "validation",
+      "prompt": "The @stdiobus/skills handshake says 1.0.0, but npm says 1.2.0-rc.0. Is the wrong server running?",
+      "expected_output": "Compare package identity and manifest identity before diagnosing a mismatch.",
+      "should_trigger": true,
+      "assertions": [
+        "Explains that serverInfo.version comes from manifest.version.",
+        "Reads installed package.json to determine the npm version.",
+        "Does not infer a wrong binary solely from those different versions."
+      ]
+    },
+    {
+      "id": 9,
+      "split": "validation",
+      "prompt": "verify this installed skills pakage end to end; no mocks, no publishing, and do not execute any retrieved scripts",
+      "expected_output": "Run real installed-package delivery checks and report their limits.",
+      "should_trigger": true,
+      "assertions": [
+        "Uses the helper or equivalent real MCP calls against the specified installation.",
+        "Compares returned skill and resource text with installed files.",
+        "Reports direct export gaps separately from MCP delivery.",
+        "Does not claim measured LLM behavior or execute resource scripts."
+      ]
+    },
+    {
+      "id": 10,
+      "split": "validation",
+      "prompt": "After searching in Russian I got an empty result. Does the @stdiobus/skills package have no relevant skill?",
+      "expected_output": "Inspect the catalog and retry concrete English lexical terms without overstating absence.",
+      "should_trigger": true,
+      "assertions": [
+        "Explains ASCII tokenization and lack of automatic translation.",
+        "Uses list_skills as the authoritative available-name list.",
+        "Does not treat a zero score or empty list as proof of subject absence."
+      ]
+    },
+    {
+      "id": 11,
+      "split": "train",
+      "prompt": "Create a new Agent Skill for our incident review process using agent-skills/create-skill.",
+      "expected_output": "Use the repository create-skill workflow; package-consumer instructions are not needed.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not activate this package-consumption skill solely to author a skill."
+      ]
+    },
+    {
+      "id": 12,
+      "split": "train",
+      "prompt": "Continue our empirical R&D and test whether the candidate filter actually speeds up our real workload.",
+      "expected_output": "Use evidence-driven-rd for the investigation, without unsolicited npm setup.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not substitute package installation or MCP delivery checks for the requested experiment."
+      ]
+    },
+    {
+      "id": 13,
+      "split": "train",
+      "prompt": "Build a Node.js stdio Bus worker pool for my own JSON-RPC image converter; it does not consume @stdiobus/skills.",
+      "expected_output": "Use stdiobus-sdk-node or the converter project contracts.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not activate this skill merely because stdio Bus and workers are mentioned."
+      ]
+    },
+    {
+      "id": 14,
+      "split": "train",
+      "prompt": "Implement a new MCP server with an HTTP transport and a write_document tool. This is unrelated to the skills package.",
+      "expected_output": "Use the target server project architecture, not this read-only consumer procedure.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not impose this package's five-tool contract on a different server."
+      ]
+    },
+    {
+      "id": 15,
+      "split": "train",
+      "prompt": "npm install fails in my unrelated React application. Explain the package-lock conflict.",
+      "expected_output": "Handle the React dependency issue without loading this package-specific skill.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not install or inspect @stdiobus/skills."
+      ]
+    },
+    {
+      "id": 16,
+      "split": "train",
+      "prompt": "Publish the next @stdiobus/skills release and move its npm dist-tag after review.",
+      "expected_output": "Follow the explicitly authorized release procedure; this skill is scoped to consumption, not release management.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not activate the consumer skill as a substitute for release requirements."
+      ]
+    },
+    {
+      "id": 17,
+      "split": "validation",
+      "prompt": "Translate the sentence \"read the packaged skill\" into French. Do not inspect any files.",
+      "expected_output": "Translate the sentence only.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not invoke MCP tools, npm commands, or package verification."
+      ]
+    },
+    {
+      "id": 18,
+      "split": "validation",
+      "prompt": "Add a dynamic provider-admission feature to the @stdiobus/skills server architecture.",
+      "expected_output": "Inspect the repository and design the requested server extension under its existing contracts.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not activate this consumer skill as an implementation specification for a new provider system."
+      ]
+    },
+    {
+      "id": 19,
+      "split": "validation",
+      "prompt": "Using a framework skill already loaded, implement an SQS handler in my Runtime Web application. No package setup is needed.",
+      "expected_output": "Use runtime-patterns-async and the application contracts.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not perform unsolicited skills-server installation or consumer verification."
+      ]
+    },
+    {
+      "id": 20,
+      "split": "validation",
+      "prompt": "Correct spelling in this paragraph about @stdiobus/skills without verifying its technical content.",
+      "expected_output": "Perform the requested bounded prose edit only.",
+      "should_trigger": false,
+      "assertions": [
+        "Does not activate package-consumption procedures for a spelling-only task."
+      ]
+    }
+  ]
+}

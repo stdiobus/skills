@@ -620,8 +620,14 @@ flowchart LR
 
 ## General Agent Workflow Skills
 
-The `agent-workflows` collection contains `create-skill` and `evidence-driven-rd`.
-Both are registered in `SkillName` and `skills-manifest.json` and are available
+`stdiobus-skills-package` teaches agents to consume this npm package through its
+installed ESM exports, five MCP tools, or a stdio Bus worker. It includes release
+compatibility boundaries, conditional API/diagnostic references, and a read-only
+consumer verification helper. This checkout adds the skill; consumers must check
+their installed manifest rather than assume an older published release includes it.
+
+The `agent-workflows` collection contains `create-skill`, `evidence-driven-rd`,
+and `stdiobus-skills-package`. All three are registered in `SkillName` and `skills-manifest.json` and are available
 through the same five MCP tools as the Runtime Web and stdio Bus SDK collections.
 Their manifest layer is 3 (Patterns); their version range is `*` because their
 procedures are not tied to a framework version.

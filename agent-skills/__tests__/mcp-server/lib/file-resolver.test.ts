@@ -38,7 +38,7 @@ describe('createFileResolver()', () => {
 
       expect(manifest).toBeDefined();
       expect(manifest.version).toBe('1.0.0');
-      expect(manifest.frameworkVersion).toBe('0.5.3-kata.1');
+      expect(manifest.frameworkVersion).toBe(JSON.parse(await fs.readFile(path.join(PACKAGE_ROOT, 'agent-skills/skills-manifest.json'), 'utf8')).frameworkVersion);
       expect(manifest.skills).toHaveLength(Object.values(SkillName).length);
       expect(manifest.lastValidated).toBeDefined();
     });
