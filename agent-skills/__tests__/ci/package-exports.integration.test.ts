@@ -1,3 +1,4 @@
+import { SkillName } from '../../types';
 /*
  * @license
  * Copyright 2026-present Raman Marozau, raman@stdiobus.com
@@ -12,7 +13,7 @@
 //          access, and MCP server startup from the consumer's perspective.
 // =============================================================================
 
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -69,6 +70,35 @@ afterAll(() => {
   }
 });
 
+
+it.each(['create-skill', 'evidence-driven-rd'])('ships every resource for %s without changing its contents', (skill) => {
+  function checkDirectory(relative: string): void {
+    const source = path.join(PACKAGE_ROOT, 'agent-skills', skill, relative);
+    for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+      const next = path.join(relative, entry.name);
+      if (entry.isDirectory()) checkDirectory(next);
+      else if (entry.name !== '.DS_Store') {
+        expect(fs.readFileSync(path.join(installedPkgDir, 'agent-skills', skill, next))).toEqual(fs.readFileSync(path.join(source, entry.name)));
+      }
+    }
+  }
+  checkDirectory('');
+});
+
+it.each([
+  'create-skill/references/spec-summary.md',
+  'runtime-patterns-http/references/templates/single-get.ts',
+  'create-skill/assets/SKILL.md.template',
+  'create-skill/scripts/validate-frontmatter.sh',
+  'evidence-driven-rd/evals/evals.json',
+  'evidence-driven-rd/agents/openai.yaml',
+])('resolves the supporting resource export %s', (resource) => {
+  const result = execFileSync(process.execPath, ['-e', `console.log(require.resolve('@stdiobus/skills/skills/${resource}'))`], {
+    cwd: consumerDir, encoding: 'utf8', timeout: PACK_TIMEOUT,
+  }).trim();
+  expect(fs.realpathSync(result)).toBe(fs.realpathSync(path.join(installedPkgDir, 'agent-skills', resource)));
+});
+
 describe('Package Exports & Tarball Verification', () => {
   // ─── Structural checks ──────────────────────────────────────
 
@@ -123,7 +153,7 @@ describe('Package Exports & Tarball Verification', () => {
       );
       const skills = JSON.parse(result);
       expect(skills).toBeInstanceOf(Array);
-      expect(skills.length).toBe(17);
+      expect(skills.length).toBe(Object.values(SkillName).length);
       expect(skills).toContain('runtime-concepts');
       expect(skills).toContain('runtime-patterns-http');
     });
@@ -133,7 +163,7 @@ describe('Package Exports & Tarball Verification', () => {
         `node --input-type=module -e "import { SkillName } from '@stdiobus/skills'; console.log(Object.keys(SkillName).length);"`,
         consumerDir,
       );
-      expect(parseInt(result, 10)).toBe(17);
+      expect(parseInt(result, 10)).toBe(Object.values(SkillName).length);
     });
   });
 
@@ -145,7 +175,7 @@ describe('Package Exports & Tarball Verification', () => {
         `node --input-type=module -e "import manifest from '@stdiobus/skills/skills-manifest' with { type: 'json' }; console.log(manifest.skills.length);"`,
         consumerDir,
       );
-      expect(parseInt(result, 10)).toBe(17);
+      expect(parseInt(result, 10)).toBe(Object.values(SkillName).length);
     });
 
     it('manifest has correct structure', () => {
@@ -156,7 +186,7 @@ describe('Package Exports & Tarball Verification', () => {
       const data = JSON.parse(result);
       expect(data.v).toBe('1.0.0');
       expect(data.fv).toBe('0.5.3-kata.1');
-      expect(data.count).toBe(17);
+      expect(data.count).toBe(Object.values(SkillName).length);
     });
   });
 

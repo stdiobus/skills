@@ -7,7 +7,7 @@
 /**
  * MCP Skills Server — standalone executable.
  *
- * Exposes the 12 agent skills, their reference materials, and the skills
+ * Exposes the registered agent skills, their reference materials, and the skills
  * manifest as five MCP tools over stdio transport (JSON-RPC 2.0 / NDJSON).
  *
  * Start: `node out/dist/mcp-server.js`
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   const resolver = createFileResolver();
   const manifest = await resolver.readManifest();
 
-  // Pre-load all 12 SKILL.md contents for the search index
+  // Pre-load all registered SKILL.md contents for the search index
   const skillContents = new Map<string, string>();
   for (const skill of manifest.skills) {
     skillContents.set(skill.name, await resolver.readSkill(skill.name));
@@ -68,7 +68,7 @@ async function main(): Promise<void> {
   server.registerTool(
     'list_references',
     {
-      description: 'List reference files available for a specific skill',
+      description: 'List reference files and supporting resources for a skill; assets/, scripts/, evals/, and agents/ paths are prefixed',
       inputSchema: { skill: z.enum(VALID_SKILLS) },
     },
     async (args) => handleListReferences(args, resolver),
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
   server.registerTool(
     'read_reference',
     {
-      description: 'Read a specific reference file for a skill',
+      description: 'Read a skill reference or supporting resource; use the path from list_references (assets/, scripts/, evals/, agents/ prefixes supported)',
       inputSchema: {
         skill: z.enum(VALID_SKILLS),
         reference: z.string().min(1),

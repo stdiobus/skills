@@ -24,18 +24,20 @@ export interface FileResolver {
   readSkill(skillName: string): Promise<string>;
 
   /**
-   * List reference files for a skill.
+   * List reference files and supporting resources for a skill.
    * Excludes `.gitkeep` files. Preserves relative paths for nested
    * subdirectories (e.g., `templates/sqs-worker.ts`).
    */
   listReferences(skillName: string): Promise<string[]>;
 
   /**
-   * Read a specific reference file for a skill.
+   * Read a reference or a prefixed assets/, scripts/, evals/, or agents/ resource.
    * Rejects paths containing `..` to prevent directory traversal.
    */
   readReference(skillName: string, referencePath: string): Promise<string>;
 }
+
+const RESOURCE_DIRECTORIES = ['assets', 'scripts', 'evals', 'agents'] as const;
 
 /**
  * Recursively list all files under a directory, returning paths
@@ -103,6 +105,11 @@ export function createFileResolver(packageRootOverride?: string): FileResolver {
     async listReferences(skillName: string): Promise<string[]> {
       const refsDir = path.join(packageRoot, 'agent-skills', skillName, 'references');
       const files = await listFilesRecursive(refsDir, refsDir);
+      // Keep existing reference paths unchanged; prefix other skill resources.
+      for (const directory of RESOURCE_DIRECTORIES) {
+        const base = path.join(packageRoot, 'agent-skills', skillName, directory);
+        files.push(...(await listFilesRecursive(base, base)).map((file) => `${directory}/${file}`));
+      }
       return files
         .filter((f) => path.basename(f) !== '.gitkeep')
         .sort();
@@ -116,8 +123,11 @@ export function createFileResolver(packageRootOverride?: string): FileResolver {
         );
       }
 
-      const refsDir = path.join(packageRoot, 'agent-skills', skillName, 'references');
-      const resolvedPath = path.resolve(refsDir, referencePath);
+      const prefix = referencePath.split('/')[0];
+      const resourceDirectory = RESOURCE_DIRECTORIES.find((directory) => directory === prefix);
+      const refsDir = path.join(packageRoot, 'agent-skills', skillName, resourceDirectory ?? 'references');
+      const relativePath = resourceDirectory ? referencePath.slice(prefix.length + 1) : referencePath;
+      const resolvedPath = path.resolve(refsDir, relativePath);
 
       // Belt-and-suspenders: verify the resolved path stays within references/
       if (!resolvedPath.startsWith(refsDir + path.sep) && resolvedPath !== refsDir) {

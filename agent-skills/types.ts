@@ -25,6 +25,10 @@ export enum SkillName {
   RuntimeVersioningAndMigration = 'runtime-versioning-and-migration',
   RuntimeValidationAndCi = 'runtime-validation-and-ci',
 
+  // General agent workflow collection
+  CreateSkill = 'create-skill',
+  EvidenceDrivenRd = 'evidence-driven-rd',
+
   // stdio Bus SDK collection (3 skills)
   StdiobusSdkCpp = 'stdiobus-sdk-cpp',
   StdiobusSdkNode = 'stdiobus-sdk-node',

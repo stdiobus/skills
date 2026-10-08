@@ -1,3 +1,4 @@
+import { SkillName } from '../../../types';
 /*
  * @license
  * Copyright 2026-present Raman Marozau, raman@stdiobus.com
@@ -326,9 +327,36 @@ describe('MCP Protocol Integration Tests', () => {
 
         const manifest = JSON.parse(response.result.content[0].text);
         expect(manifest.version).toBe('1.0.0');
-        expect(manifest.skills).toHaveLength(17);
+        expect(manifest.skills).toHaveLength(Object.values(SkillName).length);
         expect(manifest.skills[0].name).toBeDefined();
         expect(manifest.skills[0].layer).toBeDefined();
+      });
+    });
+
+
+    describe.each(['create-skill', 'evidence-driven-rd'])('complete workflow skill: %s', (skill) => {
+      it('is discoverable and every packaged resource is readable over MCP', async () => {
+        const listed = await client.sendRequest('tools/call', { name: 'list_skills', arguments: {} });
+        expect(JSON.parse(listed.result.content[0].text).skills.map((s: any) => s.name)).toContain(skill);
+        const search = await client.sendRequest('tools/call', { name: 'search_skills', arguments: { query: skill } });
+        expect(JSON.parse(search.result.content[0].text).map((s: any) => s.skill)).toContain(skill);
+        const read = await client.sendRequest('tools/call', { name: 'read_skill', arguments: { skill } });
+        expect(read.result.isError).toBeUndefined();
+        expect(read.result.content[0].text).toBe(fs.readFileSync(path.join(PACKAGE_ROOT, 'agent-skills', skill, 'SKILL.md'), 'utf8'));
+        const listedRefs = await client.sendRequest('tools/call', { name: 'list_references', arguments: { skill } });
+        const refs: string[] = JSON.parse(listedRefs.result.content[0].text);
+        expect(refs.some((ref) => ref.startsWith('assets/'))).toBe(true);
+        expect(refs.some((ref) => ref.startsWith('scripts/'))).toBe(true);
+        for (const reference of refs) {
+          const response = await client.sendRequest('tools/call', { name: 'read_reference', arguments: { skill, reference } });
+          expect(response.result.isError).toBeUndefined();
+          const prefixed = /^(assets|scripts|evals|agents)\//.test(reference);
+          expect(response.result.content[0].text).toBe(fs.readFileSync(path.join(PACKAGE_ROOT, 'agent-skills', skill, ...(prefixed ? [] : ['references']), reference), 'utf8'));
+        }
+        for (const reference of ['assets/../../package.json', 'scripts/../../package.json', '/etc/passwd', 'evals/../../../package.json']) {
+          const response = await client.sendRequest('tools/call', { name: 'read_reference', arguments: { skill, reference } });
+          expect(response.result.isError).toBe(true);
+        }
       });
     });
 
@@ -557,7 +585,7 @@ describe('MCP Protocol Integration Tests', () => {
         expect(response.result).toBeDefined();
         expect(response.result.isError).toBeUndefined();
         const manifest = JSON.parse(response.result.content[0].text);
-        expect(manifest.skills).toHaveLength(17);
+        expect(manifest.skills).toHaveLength(Object.values(SkillName).length);
       });
     });
 
@@ -572,7 +600,7 @@ describe('MCP Protocol Integration Tests', () => {
           arguments: {},
         });
         const manifest = JSON.parse(listResponse.result.content[0].text);
-        expect(manifest.skills).toHaveLength(17);
+        expect(manifest.skills).toHaveLength(Object.values(SkillName).length);
 
         // Step 2: Read the first skill
         const firstSkill = manifest.skills[0].name;

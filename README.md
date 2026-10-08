@@ -618,6 +618,31 @@ flowchart LR
 
 ---
 
+## General Agent Workflow Skills
+
+The `agent-workflows` collection contains `create-skill` and `evidence-driven-rd`.
+Both are registered in `SkillName` and `skills-manifest.json` and are available
+through the same five MCP tools as the Runtime Web and stdio Bus SDK collections.
+Their manifest layer is 3 (Patterns); their version range is `*` because their
+procedures are not tied to a framework version.
+
+`list_references` also lists supporting files under `assets/`, `scripts/`,
+`evals/`, and `agents/`, with those directory prefixes. Pass the returned path
+unchanged to `read_reference`. Existing paths relative to `references/` continue
+to work unchanged. Reading a script returns its source; the server does not
+execute it. These resource directories are included in the npm package and have
+matching `@stdiobus/skills/skills/*` subpath exports (one wildcard, including
+nested resource paths).
+
+When adding a top-level skill, register it in both `SkillName` and the manifest.
+The catalog synchronization test checks every top-level directory containing
+`SKILL.md`, preventing unregistered skills from silently becoming inaccessible.
+Framework-specific content validators retain their framework scope; workflow
+skills are checked through package completeness, MCP round trips, and native
+stdio Bus integration tests. Skill content and all supporting files are compared
+with source bytes. These checks establish delivery correctness, not the quality
+of an LLM's subsequent research decisions.
+
 ## Development
 
 ### Prerequisites

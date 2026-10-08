@@ -253,7 +253,7 @@ describe('End-to-End CI Validation Pipeline', () => {
       }
     });
 
-    it('generated manifest matches existing skills-manifest.json structure', () => {
+    it('generated framework manifest matches the registered framework subset', () => {
       const existingManifestPath = path.join(SKILLS_ROOT, 'skills-manifest.json');
       expect(fs.existsSync(existingManifestPath)).toBe(true);
 
@@ -264,10 +264,11 @@ describe('End-to-End CI Validation Pipeline', () => {
       // Structural compatibility check
       expect(existingManifest.version).toBe(manifest.version);
       expect(existingManifest.frameworkVersion).toBe(manifest.frameworkVersion);
-      expect(existingManifest.skills.length).toBe(manifest.skills.length);
+      const mappedSkills = existingManifest.skills.filter((skill: any) => skill.name in LAYER_ASSIGNMENT);
+      expect(mappedSkills.length).toBe(manifest.skills.length);
 
       // All skill names match
-      const existingNames = existingManifest.skills.map((s: any) => s.name).sort();
+      const existingNames = mappedSkills.map((s: any) => s.name).sort();
       const generatedNames = manifest.skills.map((s: any) => s.name).sort();
       expect(generatedNames).toEqual(existingNames);
     });

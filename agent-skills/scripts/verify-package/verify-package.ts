@@ -23,6 +23,7 @@ import { execSync, spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { SkillName } from '../../types';
 
 // ─── Config ─────────────────────────────────────────────────────
 
@@ -232,7 +233,7 @@ async function main(): Promise<void> {
       );
       const skills = JSON.parse(result);
       assert(Array.isArray(skills), 'SkillName values is not an array');
-      assert(skills.length === 12, `Expected 15 skills, got ${skills.length}`);
+      assert(skills.length === Object.values(SkillName).length, `Expected registered skills, got ${skills.length}`);
       assert(skills.includes('runtime-concepts'), 'Missing runtime-concepts');
       assert(skills.includes('runtime-patterns-http'), 'Missing runtime-patterns-http');
     });
@@ -244,23 +245,14 @@ async function main(): Promise<void> {
       );
       const data = JSON.parse(result);
       assert(data.v === '1.0.0', `Expected version 1.0.0, got ${data.v}`);
-      assert(data.c === 12, `Expected 15 skills, got ${data.c}`);
+      assert(data.c === Object.values(SkillName).length, `Expected registered skills, got ${data.c}`);
     });
 
     // ─── 3. Skill content ──────────────────────────────────────
 
     console.log('\n── Skill Content ──');
 
-    const EXPECTED_SKILLS = [
-      'runtime-concepts', 'runtime-lifecycle',
-      'runtime-api-core', 'runtime-api-integrations',
-      'runtime-patterns-http', 'runtime-patterns-async',
-      'runtime-patterns-data-events', 'runtime-ssr-and-web',
-      'runtime-multiplatform', 'runtime-acceleration',
-      'runtime-constraints-and-guardrails',
-      'runtime-errors-and-diagnostics', 'runtime-versioning-and-migration',
-      'runtime-validation-and-ci',
-    ];
+    const EXPECTED_SKILLS = Object.values(SkillName);
 
     for (const skill of EXPECTED_SKILLS) {
       check(`SKILL.md exists: ${skill}`, () => {
@@ -273,7 +265,26 @@ async function main(): Promise<void> {
 
       check(`references/ exists: ${skill}`, () => {
         const p = path.join(pkgDir, 'agent-skills', skill, 'references');
-        assert(fs.existsSync(p), `${p} missing`);
+        const source = path.join(PACKAGE_ROOT, 'agent-skills', skill, 'references');
+        const entries = fs.existsSync(source) ? fs.readdirSync(source).filter((name) => name !== '.gitkeep' && name !== '.DS_Store') : [];
+        assert(entries.length === 0 || fs.existsSync(p), `${p} missing`);
+      });
+    }
+
+    for (const skill of ['create-skill', 'evidence-driven-rd']) {
+      check(`all supporting files are packaged: ${skill}`, () => {
+        function verifyDirectory(relative: string): void {
+          const source = path.join(PACKAGE_ROOT, 'agent-skills', skill, relative);
+          for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+            const next = path.join(relative, entry.name);
+            if (entry.isDirectory()) verifyDirectory(next);
+            else if (entry.name !== '.DS_Store') {
+              const installed = fs.readFileSync(path.join(pkgDir, 'agent-skills', skill, next));
+              assert(installed.equals(fs.readFileSync(path.join(source, entry.name))), `Changed or missing resource: ${skill}/${next}`);
+            }
+          }
+        }
+        verifyDirectory('');
       });
     }
 
@@ -348,11 +359,11 @@ async function main(): Promise<void> {
         assert(JSON.stringify(names) === JSON.stringify(expected), `Unexpected tools: ${names.join(', ')}`);
       });
 
-      await checkAsync('list_skills returns 15 skills with layers', async () => {
+      await checkAsync('list_skills returns all registered skills with layers', async () => {
         const resp = await client!.send('tools/call', { name: 'list_skills', arguments: {} });
         assert(resp.result?.content?.[0]?.text != null, 'No content in list_skills response');
         const manifest = JSON.parse(resp.result.content[0].text);
-        assert(manifest.skills?.length === 12, `Expected 15 skills, got ${manifest.skills?.length}`);
+        assert(manifest.skills?.length === Object.values(SkillName).length, `Expected registered skills, got ${manifest.skills?.length}`);
         for (const skill of manifest.skills) {
           assert(typeof skill.name === 'string', `Skill missing name`);
           assert(typeof skill.layer === 'number', `Skill ${skill.name} missing layer`);

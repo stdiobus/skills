@@ -39,6 +39,12 @@ const PACKAGE_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const resolver = createFileResolver(PACKAGE_ROOT);
 const VALID_SKILL_NAMES = Object.values(SkillName) as string[];
 
+function resourcePath(skill: string, reference: string): string {
+  const prefixed = /^(assets|scripts|evals|agents)\//.test(reference);
+  return path.join(PACKAGE_ROOT, 'agent-skills', skill, ...(prefixed ? [] : ['references']), reference);
+}
+
+
 describe('Property 3: Reference listing correctness', () => {
   it('every listed reference exists on disk, is not .gitkeep, and nested paths include subdirectory prefix', async () => {
     await fc.assert(
@@ -62,7 +68,7 @@ describe('Property 3: Reference listing correctness', () => {
             expect(path.basename(ref)).not.toBe('.gitkeep');
 
             // Every path must exist on disk
-            const fullPath = path.join(refsDir, ref);
+            const fullPath = resourcePath(skillName, ref);
             const stat = await fs.stat(fullPath);
             expect(stat.isFile()).toBe(true);
 
@@ -114,13 +120,7 @@ describe('Property 4: Reference readability round-trip', () => {
 
           // Read the file directly from disk
           const diskContent = await fs.readFile(
-            path.join(
-              PACKAGE_ROOT,
-              'agent-skills',
-              skill,
-              'references',
-              reference,
-            ),
+            resourcePath(skill, reference),
             'utf-8',
           );
 
@@ -198,6 +198,10 @@ describe('Property 8: List-then-read reference completeness', () => {
 
           // Recursively collect all non-.gitkeep files from disk
           const diskFiles = await collectFiles(refsDir, refsDir);
+          for (const directory of ['assets', 'scripts', 'evals', 'agents']) {
+            const base = path.join(PACKAGE_ROOT, 'agent-skills', skillName, directory);
+            diskFiles.push(...await collectFiles(base, base));
+          }
           const nonGitkeepFiles = diskFiles.filter(
             (f) => path.basename(f) !== '.gitkeep',
           );

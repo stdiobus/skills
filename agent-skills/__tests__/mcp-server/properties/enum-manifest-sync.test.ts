@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import * as fc from 'fast-check';
 import { createFileResolver } from '../../../lib/file-resolver';
 import { SkillName } from '../../../types';
@@ -29,6 +30,15 @@ describe('Property 7: Enum-manifest synchronization', () => {
     manifestNames = manifest.skills.map((s) => s.name).sort();
   });
 
+  it('registers every top-level skill directory so added skills cannot be silently inaccessible', () => {
+    const base = path.join(PACKAGE_ROOT, 'agent-skills');
+    const directories = fs.readdirSync(base, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(base, entry.name, 'SKILL.md')))
+      .map((entry) => entry.name).sort();
+    expect(enumValues).toEqual(directories);
+    expect(manifestNames).toEqual(directories);
+  });
+
   it('SkillName enum values exactly match skills-manifest.json name fields', () => {
     expect(enumValues).toEqual(manifestNames);
   });
@@ -48,8 +58,8 @@ describe('Property 7: Enum-manifest synchronization', () => {
   });
 
   it('enum and manifest have the same cardinality (15 skills)', () => {
-    expect(enumValues).toHaveLength(17);
-    expect(manifestNames).toHaveLength(17);
+    expect(enumValues).toHaveLength(Object.values(SkillName).length);
+    expect(manifestNames).toHaveLength(Object.values(SkillName).length);
     expect(enumValues).toHaveLength(manifestNames.length);
   });
 

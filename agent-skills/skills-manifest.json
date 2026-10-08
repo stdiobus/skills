@@ -123,7 +123,23 @@
       "versionRange": ">=1.1.0",
       "status": "valid",
       "lastValidated": "2026-05-11T12:00:00.000Z"
+    },
+    {
+      "name": "create-skill",
+      "collection": "agent-workflows",
+      "layer": 3,
+      "versionRange": "*",
+      "status": "valid",
+      "lastValidated": "2026-10-08T00:00:00.000Z"
+    },
+    {
+      "name": "evidence-driven-rd",
+      "collection": "agent-workflows",
+      "layer": 3,
+      "versionRange": "*",
+      "status": "valid",
+      "lastValidated": "2026-10-08T00:00:00.000Z"
     }
   ],
-  "lastValidated": "2026-06-02T12:00:00.000Z"
+  "lastValidated": "2026-10-08T00:00:00.000Z"
 }
